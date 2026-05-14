@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Link Hub</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body data-page="index">
+    <div class="shell">
+      <aside class="rail">
+        <div>
+          <p class="eyebrow">Personal Link Hub</p>
+          <h1>个人链接中转站</h1>
+          <p class="rail-copy">把网页收进来，留下摘要、标签和可分享的短链。</p>
+        </div>
+        <nav class="nav">
+          <a class="nav-link active" href="/">卡片流</a>
+          <a class="nav-link" href="/new">新增链接</a>
+          <a class="nav-link" href="/taxonomy">标签管理</a>
+        </nav>
+        <button id="logout-button" class="ghost-button" type="button">退出登录</button>
+      </aside>
+      <main class="panel">
+        <section class="hero-card compact">
+          <div class="hero-copy-stack">
+            <p class="eyebrow eyebrow-pill">Library</p>
+            <h2 class="hero-title-block">检索你的网页资产</h2>
+          </div>
+          <div class="filters filter-shell">
+            <input id="search-input" class="field" type="search" placeholder="搜索标题、URL 或备注" />
+            <select id="status-filter" class="field">
+              <option value="active">活跃</option>
+              <option value="archived">归档</option>
+              <option value="">全部状态</option>
+            </select>
+            <div id="tag-filter" class="tag-cluster soft-panel tag-filter-shell"></div>
+          </div>
+        </section>
+        <section>
+          <div class="section-heading">
+            <h3 class="section-title-pill">链接卡片</h3>
+            <p id="list-hint" class="muted hint-pill">加载中...</p>
+          </div>
+          <p id="list-message" class="muted message-slot message-pill"></p>
+          <div id="link-grid" class="link-grid"></div>
+        </section>
+      </main>
+    </div>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>登录 Link Hub</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body data-page="login" class="login-body">
+    <main class="login-layout">
+      <section class="login-hero">
+        <p class="eyebrow">Single-user admin</p>
+        <h1>个人链接中转站</h1>
+        <p>第一版骨架聚焦链接保存、抓取、找回和短链分享。</p>
+      </section>
+      <section class="login-card">
+        <h2 class="section-title-pill">后台登录</h2>
+        <form id="login-form" class="stack-form content-form">
+          <label class="form-field">
+            <span class="field-label-pill">用户名</span>
+            <input class="field" name="username" type="text" autocomplete="username" />
+          </label>
+          <label class="form-field">
+            <span class="field-label-pill">密码</span>
+            <input class="field" name="password" type="password" autocomplete="current-password" />
+          </label>
+          <button class="primary-button" type="submit">进入后台</button>
+          <p id="login-message" class="muted message-slot message-pill"></p>
+        </form>
+      </section>
+    </main>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

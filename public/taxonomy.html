@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>标签管理</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body data-page="taxonomy">
+    <div class="shell">
+      <aside class="rail">
+        <div>
+          <p class="eyebrow">Taxonomy</p>
+          <h1>标签管理</h1>
+          <p class="rail-copy">用标签组织第一版链接资产，保持简单清晰。</p>
+        </div>
+        <nav class="nav">
+          <a class="nav-link" href="/">卡片流</a>
+          <a class="nav-link" href="/new">新增链接</a>
+          <a class="nav-link active" href="/taxonomy">标签管理</a>
+        </nav>
+        <button id="logout-button" class="ghost-button" type="button">退出登录</button>
+      </aside>
+      <main class="panel panel-wide">
+        <section>
+          <div class="surface-card content-note-card">
+            <h2 class="section-title-pill">标签</h2>
+            <form id="tag-form" class="inline-form">
+              <input id="tag-name" class="field field-grow" type="text" placeholder="例如：AI / 前端 / 收藏" />
+              <button class="primary-button" type="submit">新增标签</button>
+            </form>
+            <p id="tag-message" class="muted message-slot message-pill"></p>
+            <div id="tag-list" class="list-stack"></div>
+          </div>
+        </section>
+      </main>
+    </div>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

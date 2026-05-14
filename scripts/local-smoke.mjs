@@ -1,0 +1,131 @@
+import assert from "node:assert/strict";
+import { chromium } from "playwright-core";
+
+const baseUrl = process.env.BASE_URL ?? "http://127.0.0.1:8787";
+const smokeUsername = process.env.SMOKE_USERNAME ?? "admin";
+const smokePassword = process.env.SMOKE_PASSWORD ?? "admin123";
+const browser = await chromium.launch({
+  headless: true,
+  executablePath: "C:/Users/omen/AppData/Local/ms-playwright/chromium-1217/chrome-win64/chrome.exe",
+});
+const page = await browser.newPage();
+const errors = [];
+page.on("console", (msg) => {
+  if (msg.type() === "error") {
+    const text = msg.text();
+    if (!text.includes("Failed to fetch")) {
+      errors.push(`console:${text}`);
+    }
+  }
+});
+page.on("pageerror", (err) => {
+  errors.push(`pageerror:${err.message}`);
+});
+
+const unique = Date.now();
+const tagName = `联调标签-${unique}`;
+const noteValue = `联调备注-${unique}`;
+
+try {
+  await page.goto(`${baseUrl}/login`, { waitUntil: "networkidle" });
+  await page.fill('input[name="username"]', smokeUsername);
+  await page.fill('input[name="password"]', smokePassword);
+  await page.click('button[type="submit"]');
+  await page.waitForURL(`${baseUrl}/`, { timeout: 15000 });
+  await page.waitForLoadState("networkidle");
+
+  await page.goto(`${baseUrl}/taxonomy`, { waitUntil: "networkidle" });
+  await page.fill("#tag-name", tagName);
+  await page.click('#tag-form button[type="submit"]');
+  await page.waitForFunction((name) => document.body.innerText.includes(name), tagName);
+
+  await page.fill("#tag-name", tagName);
+  await page.click('#tag-form button[type="submit"]');
+  await page.waitForFunction(() => {
+    const el = document.querySelector("#tag-message");
+    return el && el.textContent.includes("已存在");
+  });
+
+  await page.goto(`${baseUrl}/new`, { waitUntil: "networkidle" });
+  await page.fill("#url", "http://127.0.0.1/");
+  await page.fill("#title", "非法链接测试");
+  await page.click('#link-form button[type="submit"]');
+  await page.waitForFunction(() => {
+    const el = document.querySelector("#save-message");
+    return el && el.textContent.trim().length > 0;
+  });
+
+  await page.fill("#url", "https://example.com/");
+  await page.fill("#title", "Example Domain");
+  await page.fill("#note", noteValue);
+  await page.locator('button[data-tag-id]').filter({ hasText: tagName }).click();
+  await page.click('#link-form button[type="submit"]');
+  await page.waitForURL(/\/link\?id=\d+$/, { timeout: 15000 });
+  await page.waitForLoadState("networkidle");
+
+  const detailUrl = page.url();
+  const detailTitle = await page.locator("#detail-title").textContent();
+  assert.ok(detailTitle && detailTitle.trim().length > 0, "detail title should exist");
+  const detailNote = await page.locator("#detail-note").inputValue();
+  assert.equal(detailNote, noteValue, "detail note should persist");
+
+  await page.selectOption("#detail-status", "archived");
+  await page.click('#detail-form button[type="submit"]');
+  await page.waitForFunction(() => {
+    const el = document.querySelector("#detail-message");
+    return el && el.textContent.includes("已保存");
+  });
+
+  await page.click("#generate-short-link");
+  await page.waitForSelector("#short-link-output a", { timeout: 15000 });
+  const shortLinkHref = await page.locator("#short-link-output a").getAttribute("href");
+  assert.ok(shortLinkHref, "short link should be generated");
+
+  const shortPage = await browser.newPage();
+  await shortPage.goto(shortLinkHref, { waitUntil: "domcontentloaded" });
+  await shortPage.waitForURL("https://example.com/", { timeout: 20000 });
+  await shortPage.close();
+
+  await page.reload({ waitUntil: "networkidle" });
+  const visitCountText = await page.locator("#detail-meta .stat").nth(2).textContent();
+  assert.ok(visitCountText && /[1-9]/.test(visitCountText), "visit count should be updated");
+  const existingShortLinkText = await page.locator("#existing-short-link").textContent();
+  assert.ok(existingShortLinkText && existingShortLinkText.includes("/s/"), "existing short link should display");
+
+  await page.goto(`${baseUrl}/new`, { waitUntil: "networkidle" });
+  await page.fill("#url", "https://example.com/");
+  await page.fill("#title", "Example Domain");
+  await page.fill("#note", `${noteValue}-duplicate`);
+  await page.locator('button[data-tag-id]').filter({ hasText: tagName }).click();
+  await page.click('#link-form button[type="submit"]');
+  await page.waitForURL(/\/link\?id=\d+$/, { timeout: 15000 });
+
+  await page.goto(`${baseUrl}/`, { waitUntil: "networkidle" });
+  await page.fill("#search-input", noteValue);
+  await page.waitForTimeout(500);
+  const listText = await page.locator("#link-grid").textContent();
+  assert.ok(listText && listText.includes("Example Domain"), "search should find saved link by note");
+
+  await page.locator('#tag-filter button[data-tag-id]').filter({ hasText: tagName }).click();
+  await page.waitForTimeout(500);
+  const tagFilteredCount = await page.locator("#link-grid .link-card").count();
+  assert.ok(tagFilteredCount >= 1, "tag filter should work");
+
+  await page.selectOption("#status-filter", "archived");
+  await page.waitForTimeout(500);
+  const archivedText = await page.locator("#link-grid").textContent();
+  assert.ok(archivedText && archivedText.includes("archived"), "status filter should work");
+
+  console.log(JSON.stringify({
+    ok: true,
+    detailUrl,
+    shortLinkHref,
+    visitCountText,
+    errors,
+  }, null, 2));
+} catch (error) {
+  console.error(JSON.stringify({ ok: false, message: error.message, errors }, null, 2));
+  process.exitCode = 1;
+} finally {
+  await browser.close();
+}

@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>链接详情</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body data-page="link">
+    <div class="shell">
+      <aside class="rail">
+        <div>
+          <p class="eyebrow">Detail</p>
+          <h1>链接详情</h1>
+          <p class="rail-copy">查看完整元数据、修改内容并手动生成短链。</p>
+        </div>
+        <nav class="nav">
+          <a class="nav-link" href="/">卡片流</a>
+          <a class="nav-link" href="/new">新增链接</a>
+          <a class="nav-link" href="/taxonomy">标签管理</a>
+        </nav>
+        <button id="logout-button" class="ghost-button" type="button">退出登录</button>
+      </aside>
+      <main class="panel panel-wide">
+        <section class="hero-card compact">
+          <div class="hero-copy-stack">
+            <p class="eyebrow eyebrow-pill">Metrics</p>
+            <h2 id="detail-title" class="hero-title-block">载入中...</h2>
+            <p id="detail-summary-text" class="muted soft-panel hero-summary-block"></p>
+          </div>
+          <div id="detail-meta" class="stats-row"></div>
+        </section>
+        <section class="editor-grid">
+          <form id="detail-form" class="stack-form surface-card content-form">
+            <label class="form-field"><span class="field-label-pill">URL</span><input id="detail-url" name="url" class="field" type="url" required /></label>
+            <label class="form-field"><span class="field-label-pill">标题</span><input id="detail-title-input" name="title" class="field" type="text" /></label>
+            <label class="form-field"><span class="field-label-pill">站点名</span><input id="detail-site-name" name="siteName" class="field" type="text" /></label>
+            <label class="form-field"><span class="field-label-pill">Favicon</span><input id="detail-favicon" name="faviconUrl" class="field" type="url" /></label>
+            <label class="form-field"><span class="field-label-pill">封面图</span><input id="detail-cover" name="coverImageUrl" class="field" type="url" /></label>
+            <label class="form-field"><span class="field-label-pill">摘要</span><textarea id="detail-summary" name="summary" class="field textarea"></textarea></label>
+            <label class="form-field"><span class="field-label-pill">备注</span><textarea id="detail-note" name="note" class="field textarea"></textarea></label>
+            <label class="form-field">
+              <span class="field-label-pill">状态</span>
+              <select id="detail-status" name="status" class="field">
+                <option value="active">active</option>
+                <option value="archived">archived</option>
+              </select>
+            </label>
+            <div class="form-field">
+              <span class="field-label-pill">标签</span>
+              <div id="detail-tags" class="tag-cluster selectable"></div>
+            </div>
+            <button class="primary-button" type="submit">保存修改</button>
+            <p id="detail-message" class="muted message-slot message-pill"></p>
+          </form>
+          <aside class="surface-card notes-card content-note-card">
+            <h3 class="section-title-pill">分享与跳转</h3>
+            <div class="soft-panel action-stack">
+              <p id="existing-short-link" class="muted message-slot message-pill"></p>
+              <button id="generate-short-link" class="primary-button" type="button">生成短链</button>
+              <p id="short-link-output" class="muted message-slot message-pill"></p>
+              <a id="open-original-link" class="text-link action-link-block" href="#" target="_blank" rel="noreferrer">打开原始链接</a>
+            </div>
+          </aside>
+        </section>
+      </main>
+    </div>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

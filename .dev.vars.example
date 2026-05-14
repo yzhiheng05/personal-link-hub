@@ -1,0 +1,3 @@
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD_HASH=replace_with_sha256_hex
+SESSION_SECRET=replace_with_a_long_random_secret

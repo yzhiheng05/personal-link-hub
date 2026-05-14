@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>新增链接</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body data-page="new">
+    <div class="shell">
+      <aside class="rail">
+        <div>
+          <p class="eyebrow">Capture</p>
+          <h1>新增链接</h1>
+          <p class="rail-copy">直接录入核心信息，保存后再按需补充更多元数据。</p>
+        </div>
+        <nav class="nav">
+          <a class="nav-link" href="/">卡片流</a>
+          <a class="nav-link active" href="/new">新增链接</a>
+          <a class="nav-link" href="/taxonomy">标签管理</a>
+        </nav>
+        <button id="logout-button" class="ghost-button" type="button">退出登录</button>
+      </aside>
+      <main class="panel panel-wide">
+        <section class="editor-grid">
+          <form id="link-form" class="stack-form surface-card content-form">
+            <h3 class="section-title-pill">保存链接</h3>
+            <label class="form-field"><span class="field-label-pill">URL</span><input id="url" name="url" class="field" type="url" required /></label>
+            <label class="form-field"><span class="field-label-pill">标题</span><input id="title" name="title" class="field" type="text" /></label>
+            <label class="form-field"><span class="field-label-pill">备注</span><textarea id="note" name="note" class="field textarea"></textarea></label>
+            <div class="form-field">
+              <span class="field-label-pill">标签</span>
+              <div id="tag-selector" class="tag-cluster selectable"></div>
+            </div>
+            <button class="primary-button" type="submit">保存链接</button>
+            <p id="save-message" class="muted message-slot message-pill"></p>
+          </form>
+          <aside class="surface-card notes-card content-note-card">
+            <h3 class="section-title-pill">第一版约束</h3>
+            <div class="soft-panel">
+              <ul class="clean-list">
+                <li>新增页只录入核心字段</li>
+                <li>标签是第一版唯一组织方式</li>
+                <li>详情页可再补充元数据</li>
+                <li>短链生成与保存分开触发</li>
+                <li>默认允许重复 URL，但会提示</li>
+              </ul>
+            </div>
+          </aside>
+        </section>
+      </main>
+    </div>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>
