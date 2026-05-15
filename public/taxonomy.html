@@ -22,7 +22,7 @@
         <button id="logout-button" class="ghost-button" type="button">退出登录</button>
       </aside>
       <main class="panel panel-wide">
-        <section>
+        <section class="taxonomy-layout">
           <div class="surface-card content-note-card">
             <h2 class="section-title-pill">标签</h2>
             <form id="tag-form" class="inline-form">
@@ -31,6 +31,14 @@
             </form>
             <p id="tag-message" class="muted message-slot message-pill"></p>
             <div id="tag-list" class="list-stack"></div>
+          </div>
+          <div class="surface-card content-note-card taxonomy-results-card">
+            <div class="section-heading">
+              <h2 id="taxonomy-results-title" class="section-title-pill">点击上方标签查看结果</h2>
+              <p id="taxonomy-results-hint" class="muted hint-pill"></p>
+            </div>
+            <p id="taxonomy-message" class="muted message-slot message-pill"></p>
+            <div id="taxonomy-link-grid" class="link-grid hidden"></div>
           </div>
         </section>
       </main>

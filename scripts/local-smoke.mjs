@@ -23,7 +23,14 @@ page.on("pageerror", (err) => {
 
 const unique = Date.now();
 const tagName = `联调标签-${unique}`;
+const secondTag = `自动创建-${unique}`;
 const noteValue = `联调备注-${unique}`;
+
+async function addTagToken(rootSelector, value) {
+  const input = page.locator(`${rootSelector} .tag-editor-input`);
+  await input.fill(value);
+  await input.press("Enter");
+}
 
 try {
   await page.goto(`${baseUrl}/login`, { waitUntil: "networkidle" });
@@ -56,7 +63,8 @@ try {
   await page.fill("#url", "https://example.com/");
   await page.fill("#title", "Example Domain");
   await page.fill("#note", noteValue);
-  await page.locator('button[data-tag-id]').filter({ hasText: tagName }).click();
+  await addTagToken("#tag-editor", tagName);
+  await addTagToken("#tag-editor", `${secondTag}，`);
   await page.click('#link-form button[type="submit"]');
   await page.waitForURL(/\/link\?id=\d+$/, { timeout: 15000 });
   await page.waitForLoadState("networkidle");
@@ -66,6 +74,9 @@ try {
   assert.ok(detailTitle && detailTitle.trim().length > 0, "detail title should exist");
   const detailNote = await page.locator("#detail-note").inputValue();
   assert.equal(detailNote, noteValue, "detail note should persist");
+  const detailChips = await page.locator("#detail-tag-editor .tag-chip").allTextContents();
+  assert.ok(detailChips.some((text) => text.includes(tagName)), "existing tag should render as chip");
+  assert.ok(detailChips.some((text) => text.includes(secondTag)), "auto-created tag should render as chip");
 
   await page.selectOption("#detail-status", "archived");
   await page.click('#detail-form button[type="submit"]');
@@ -94,7 +105,7 @@ try {
   await page.fill("#url", "https://example.com/");
   await page.fill("#title", "Example Domain");
   await page.fill("#note", `${noteValue}-duplicate`);
-  await page.locator('button[data-tag-id]').filter({ hasText: tagName }).click();
+  await addTagToken("#tag-editor", tagName);
   await page.click('#link-form button[type="submit"]');
   await page.waitForURL(/\/link\?id=\d+$/, { timeout: 15000 });
 
@@ -109,16 +120,34 @@ try {
   const tagFilteredCount = await page.locator("#link-grid .link-card").count();
   assert.ok(tagFilteredCount >= 1, "tag filter should work");
 
+  const sourceHref = await page.locator("#link-grid .card-source-link").first().getAttribute("href");
+  const detailHref = await page.locator("#link-grid .card-title-link").first().getAttribute("href");
+  assert.ok(sourceHref && sourceHref.startsWith("https://"), "source label should open external url");
+  assert.ok(detailHref && /\/link\?id=\d+$/.test(detailHref), "title should open detail page");
+
   await page.selectOption("#status-filter", "archived");
   await page.waitForTimeout(500);
   const archivedText = await page.locator("#link-grid").textContent();
   assert.ok(archivedText && archivedText.includes("archived"), "status filter should work");
+
+  await page.goto(`${baseUrl}/taxonomy`, { waitUntil: "networkidle" });
+  await page.locator('#tag-list [data-taxonomy-tag-id]').filter({ hasText: tagName }).click();
+  await page.waitForSelector("#taxonomy-link-grid .link-card", { timeout: 15000 });
+  const taxonomyHint = await page.locator("#taxonomy-results-hint").textContent();
+  const taxonomyText = await page.locator("#taxonomy-link-grid").textContent();
+  assert.ok(taxonomyHint && taxonomyHint.includes("共"), "taxonomy should show count hint");
+  assert.ok(taxonomyText && taxonomyText.includes("Example Domain"), "taxonomy should render matching cards in-page");
+
+  await page.locator('#tag-list [data-taxonomy-tag-id]').filter({ hasText: tagName }).click();
+  await page.waitForFunction(() => document.querySelector("#taxonomy-link-grid")?.classList.contains("hidden"));
 
   console.log(JSON.stringify({
     ok: true,
     detailUrl,
     shortLinkHref,
     visitCountText,
+    sourceHref,
+    detailHref,
     errors,
   }, null, 2));
 } catch (error) {

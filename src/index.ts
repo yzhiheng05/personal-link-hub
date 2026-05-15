@@ -97,7 +97,7 @@ async function handleApi(request: Request, env: Env, pathname: string, url: URL)
   }
 
   if (pathname === "/api/links" && request.method === "POST") {
-    const payload = normalizeLinkInput(await readJson<Record<string, unknown>>(request));
+    const payload = await parseLinkPayload(request);
     assertValidLinkPayload(payload);
     assertPublicHttpUrl(payload.url);
     const result = await createLink(env, payload);
@@ -117,7 +117,7 @@ async function handleApi(request: Request, env: Env, pathname: string, url: URL)
   }
 
   if (linkMatch?.[1] && request.method === "PATCH") {
-    const payload = normalizeLinkInput(await readJson<Record<string, unknown>>(request));
+    const payload = await parseLinkPayload(request);
     assertValidLinkPayload(payload);
     assertPublicHttpUrl(payload.url);
     const updated = await updateLink(env, Number(linkMatch[1]), payload);
@@ -177,6 +177,11 @@ function validateConfig(env: Env): void {
 
 async function getSessionSecret(env: Env): Promise<string> {
   return deriveSessionSecret(env.ADMIN_PASSWORD);
+}
+
+async function parseLinkPayload(request: Request): Promise<ReturnType<typeof normalizeLinkInput>> {
+  const body = await readJson<Record<string, unknown>>(request);
+  return normalizeLinkInput(body);
 }
 
 function assertValidLinkPayload(payload: ReturnType<typeof normalizeLinkInput>): void {

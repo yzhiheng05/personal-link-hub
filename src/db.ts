@@ -42,6 +42,7 @@ interface LinkInput {
   status: "active" | "archived";
   metadataStatus: "complete" | "partial";
   tagIds: number[];
+  tagNames: string[];
 }
 
 export async function listLinks(env: Env, filters: LinkFilters): Promise<LinkRecord[]> {
@@ -124,7 +125,8 @@ export async function createLink(env: Env, input: LinkInput): Promise<{ link: Li
   ).run();
 
   const linkId = Number(insertResult.meta.last_row_id);
-  await replaceLinkTags(env, linkId, input.tagIds);
+  const tagIds = await resolveTagIds(env, input);
+  await replaceLinkTags(env, linkId, tagIds);
   const link = await getLinkById(env, linkId);
   if (!link) throw new Error("Failed to load created link.");
 
@@ -152,7 +154,8 @@ export async function updateLink(env: Env, id: number, input: LinkInput): Promis
     id,
   ).run();
 
-  await replaceLinkTags(env, id, input.tagIds);
+  const tagIds = await resolveTagIds(env, input);
+  await replaceLinkTags(env, id, tagIds);
   return getLinkById(env, id);
 }
 
@@ -199,14 +202,19 @@ export async function listTags(env: Env): Promise<Array<{ id: number; name: stri
 }
 
 export async function createTag(env: Env, name: string): Promise<void> {
+  const normalizedName = normalizeTagNames([name])[0];
+  if (!normalizedName) {
+    throw new HttpError(400, "标签名称不能为空。");
+  }
+
   try {
-    await env.DB.prepare("INSERT INTO tags (name) VALUES (?)").bind(name).run();
+    await env.DB.prepare("INSERT INTO tags (name) VALUES (?)").bind(normalizedName).run();
   } catch (error) {
     throw mapUniqueNameError(error, "标签已存在。");
   }
 }
 
-export function normalizeLinkInput(payload: Partial<LinkInput & { tagIds: Array<number | string> }>): LinkInput {
+export function normalizeLinkInput(payload: Partial<LinkInput & { tagIds: Array<number | string>; tagNames: Array<string | number> }>): LinkInput {
   return {
     url: String(payload.url ?? "").trim(),
     title: toNullableString(payload.title),
@@ -218,9 +226,23 @@ export function normalizeLinkInput(payload: Partial<LinkInput & { tagIds: Array<
     status: payload.status === "archived" ? "archived" : "active",
     metadataStatus: payload.metadataStatus === "partial" ? "partial" : inferMetadataStatus(payload),
     tagIds: Array.isArray(payload.tagIds)
-      ? payload.tagIds.map((value) => Number(value)).filter((value) => Number.isInteger(value) && value > 0)
+      ? uniqueNumbers(payload.tagIds.map((value) => Number(value)).filter((value) => Number.isInteger(value) && value > 0))
       : [],
+    tagNames: normalizeTagNames(Array.isArray(payload.tagNames) ? payload.tagNames : []),
   };
+}
+
+function normalizeTagNames(values: unknown[]): string[] {
+  const seen = new Set<string>();
+  const names: string[] = [];
+  for (const value of values) {
+    if (typeof value !== "string") continue;
+    const name = value.trim();
+    if (!name || seen.has(name)) continue;
+    seen.add(name);
+    names.push(name);
+  }
+  return names;
 }
 
 async function hydrateLink(env: Env, row: Record<string, unknown>): Promise<LinkRecord> {
@@ -260,6 +282,48 @@ async function replaceLinkTags(env: Env, linkId: number, tagIds: number[]): Prom
   }
 }
 
+async function resolveTagIds(env: Env, input: LinkInput): Promise<number[]> {
+  if (input.tagNames.length > 0) {
+    const tagIds: number[] = [];
+    for (const tagName of input.tagNames) {
+      tagIds.push(await ensureTagId(env, tagName));
+    }
+    return uniqueNumbers(tagIds);
+  }
+
+  return listExistingTagIds(env, input.tagIds);
+}
+
+async function listExistingTagIds(env: Env, tagIds: number[]): Promise<number[]> {
+  if (tagIds.length === 0) return [];
+
+  const placeholders = tagIds.map(() => "?").join(", ");
+  const { results } = await env.DB.prepare(`SELECT id FROM tags WHERE id IN (${placeholders})`)
+    .bind(...tagIds)
+    .all<{ id: number | string }>();
+
+  return uniqueNumbers((results ?? []).map((row) => Number(row.id)).filter((value) => Number.isInteger(value) && value > 0));
+}
+
+async function ensureTagId(env: Env, name: string): Promise<number> {
+  const existing = await env.DB.prepare("SELECT id FROM tags WHERE name = ?").bind(name).first<{ id: number | string }>();
+  if (existing?.id != null) {
+    return Number(existing.id);
+  }
+
+  try {
+    const insertResult = await env.DB.prepare("INSERT INTO tags (name) VALUES (?)").bind(name).run();
+    return Number(insertResult.meta.last_row_id);
+  } catch (error) {
+    const created = await env.DB.prepare("SELECT id FROM tags WHERE name = ?").bind(name).first<{ id: number | string }>();
+    if (created?.id != null) {
+      return Number(created.id);
+    }
+
+    throw mapUniqueNameError(error, "标签已存在。");
+  }
+}
+
 function generateShortCode(): string {
   const alphabet = "23456789abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ";
   const bytes = new Uint8Array(6);
@@ -279,6 +343,10 @@ function toNullableString(value: unknown): string | null {
 
 function nullable(value: unknown): string | null {
   return value == null ? null : String(value);
+}
+
+function uniqueNumbers(values: number[]): number[] {
+  return [...new Set(values)];
 }
 
 function mapUniqueNameError(error: unknown, fallbackMessage: string): HttpError {
