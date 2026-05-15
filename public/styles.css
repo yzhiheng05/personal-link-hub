@@ -1210,30 +1210,33 @@ body[data-page="taxonomy"] .panel {
 }
 
 .taxonomy-empty-state {
-  display: grid;
-  place-items: center;
-  gap: 8px;
-  min-height: 260px;
-  padding: 30px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 0;
+  padding: 12px 14px;
   border: 1px dashed rgba(31, 28, 22, 0.14);
-  border-radius: 18px;
-  background:
-    radial-gradient(circle at 18% 16%, rgba(186, 74, 47, 0.12), transparent 28%),
-    linear-gradient(135deg, rgba(255, 255, 255, 0.44), rgba(239, 225, 202, 0.44));
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.42);
   color: var(--muted);
-  text-align: center;
+}
+
+.taxonomy-empty-state.hidden {
+  display: none;
 }
 
 .taxonomy-empty-state strong {
   color: var(--ink);
-  font-family: "Fraunces", serif;
-  font-size: 28px;
+  font-family: "Manrope", sans-serif;
+  font-size: 14px;
+  font-weight: 900;
   letter-spacing: 0;
+  white-space: nowrap;
 }
 
 .taxonomy-empty-state span {
-  max-width: 34ch;
-  line-height: 1.55;
+  line-height: 1.45;
+  font-size: 13px;
 }
 
 .taxonomy-results-panel .collection-grid {
@@ -1283,3 +1286,71 @@ body[data-page="taxonomy"] .panel {
     font-size: 28px;
   }
 }
+
+
+/* Explicit card actions and detail tag navigation */
+.card-action-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.card-action-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  padding: 8px 10px;
+  border: 1px solid rgba(31, 28, 22, 0.1);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.56);
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 900;
+  transition: transform 120ms ease, border-color 120ms ease, background 120ms ease;
+}
+
+.card-action-button:hover {
+  transform: translateY(-1px);
+  border-color: rgba(127, 40, 23, 0.28);
+  background: rgba(255, 247, 234, 0.94);
+}
+
+.card-open-button {
+  color: var(--accent-dark);
+}
+
+.card-detail-button {
+  color: var(--success);
+}
+
+.preview-card-shell .card-action-row {
+  pointer-events: none;
+  opacity: 0.72;
+}
+
+.detail-tag-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.detail-tag-link {
+  display: inline-flex;
+  align-items: center;
+  padding: 7px 10px;
+  border: 1px solid rgba(31, 28, 22, 0.1);
+  border-radius: 10px;
+  background: rgba(31, 28, 22, 0.06);
+  color: var(--accent-dark);
+  font-size: 12px;
+  font-weight: 900;
+  transition: transform 120ms ease, border-color 120ms ease, background 120ms ease;
+}
+
+.detail-tag-link:hover {
+  transform: translateY(-1px);
+  border-color: rgba(127, 40, 23, 0.28);
+  background: rgba(186, 74, 47, 0.1);
+}
+

@@ -91,6 +91,8 @@ try {
   const detailChips = await page.locator("#detail-tag-editor .tag-chip").allTextContents();
   assert.ok(detailChips.some((text) => text.includes(tagName)), "existing tag should render as chip");
   assert.ok(detailChips.some((text) => text.includes(secondTag)), "auto-created tag should render as chip");
+  const detailTagHref = await page.locator("#detail-tag-links .detail-tag-link", { hasText: tagName }).getAttribute("href");
+  assert.ok(detailTagHref && /\/taxonomy\?tagId=\d+$/.test(detailTagHref), "detail tag should link to taxonomy tag result");
 
   await page.selectOption("#detail-status", "archived");
   await page.click('#detail-form button[type="submit"]');
@@ -144,18 +146,32 @@ try {
 
   const sourceHref = await page.locator("#link-grid .card-source-link").first().getAttribute("href");
   const detailHref = await page.locator("#link-grid .card-title-link").first().getAttribute("href");
+  const openButtonHref = await page.locator("#link-grid .card-open-button").first().getAttribute("href");
+  const detailButtonHref = await page.locator("#link-grid .card-detail-button").first().getAttribute("href");
   assert.ok(sourceHref && sourceHref.startsWith("https://"), "source label should open external url");
   assert.ok(detailHref && /\/link\?id=\d+$/.test(detailHref), "title should open detail page");
+  assert.equal(openButtonHref, sourceHref, "open button should point to external url");
+  assert.equal(detailButtonHref, detailHref, "detail button should point to detail page");
 
   await page.selectOption("#status-filter", "archived");
   await page.waitForTimeout(500);
   const archivedText = await page.locator("#link-grid").textContent();
   assert.ok(archivedText && archivedText.includes("archived"), "status filter should work");
 
+  await page.goto(new URL(detailTagHref, baseUrl).toString(), { waitUntil: "networkidle" });
+  await page.waitForSelector("#taxonomy-link-grid .link-card", { timeout: 15000 });
+  const preselectedText = await page.locator("#taxonomy-link-grid").textContent();
+  assert.ok(preselectedText && preselectedText.includes("Example Domain"), "taxonomy tag link should preselect matching cards");
+  await page.waitForSelector('#tag-list [data-taxonomy-tag-id][aria-pressed="true"]', { timeout: 15000 });
+
   await page.goto(`${baseUrl}/taxonomy`, { waitUntil: "networkidle" });
   await page.waitForSelector("#taxonomy-empty-state:not(.hidden)", { timeout: 15000 });
   await page.locator('#tag-list [data-taxonomy-tag-id]').filter({ hasText: tagName }).click();
   await page.waitForSelector("#taxonomy-link-grid .link-card", { timeout: 15000 });
+  await page.waitForFunction(() => {
+    const emptyState = document.querySelector("#taxonomy-empty-state");
+    return emptyState?.classList.contains("hidden") && getComputedStyle(emptyState).display === "none";
+  });
   const taxonomyHint = await page.locator("#taxonomy-results-hint").textContent();
   const taxonomyText = await page.locator("#taxonomy-link-grid").textContent();
   assert.ok(taxonomyHint && taxonomyHint.includes("共"), "taxonomy should show count hint");

@@ -138,6 +138,7 @@ async function initTaxonomyPage() {
   await loadTags();
   renderTaxonomyList();
   renderTaxonomyResults();
+  await loadTaxonomyTagFromUrl();
 
   find("#tag-form").addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -170,18 +171,7 @@ async function initTaxonomyPage() {
       return;
     }
 
-    clearFlash(find("#taxonomy-message"));
-    state.activeTaxonomyTagId = tagId;
-    renderTaxonomyList();
-    try {
-      const response = await apiFetch(`/api/links?tagIds=${tagId}`);
-      state.taxonomyLinks = response.items || [];
-      renderTaxonomyResults();
-    } catch (error) {
-      state.taxonomyLinks = [];
-      renderTaxonomyResults();
-      flash(find("#taxonomy-message"), error.message, true);
-    }
+    await activateTaxonomyTag(tagId);
   });
 }
 
@@ -223,6 +213,7 @@ function populateLinkDetail(item) {
   find("#detail-title").textContent = title;
   find("#detail-site-label").textContent = sourceLabel;
   find("#detail-summary-text").textContent = item.summary || item.note || "暂无摘要，补上一句以后它会在收藏墙里更好找。";
+  renderDetailTagLinks(item.tags || []);
   renderVisual(find("#detail-visual"), item, "detail");
   find("#detail-meta").innerHTML = `
     <div class="stat"><span class="stat-label">创建</span><span class="stat-value">${formatDate(item.created_at)}</span></div>
@@ -248,6 +239,14 @@ function populateLinkDetail(item) {
   }
 }
 
+function renderDetailTagLinks(tags) {
+  const container = find("#detail-tag-links");
+  if (!container) return;
+  const cleanTags = Array.isArray(tags) ? tags.filter((tag) => !isSmokeTagName(tag.name)) : [];
+  container.innerHTML = cleanTags.length > 0
+    ? cleanTags.map((tag) => `<a class="detail-tag-link" href="/taxonomy?tagId=${tag.id}">#${escapeHtml(tag.name)}</a>`).join("")
+    : '<span class="muted muted-tag">未标记</span>';
+}
 function renderTaxonomyList() {
   const list = find("#tag-list");
   const count = find("#taxonomy-tag-count");
@@ -295,6 +294,28 @@ function renderTaxonomyResults() {
   if (emptyState) emptyState.classList.add("hidden");
   grid.classList.remove("hidden");
   renderLinkGrid(grid, state.taxonomyLinks, { emptyMessage: "这个标签下还没有收藏。" });
+}
+
+async function loadTaxonomyTagFromUrl() {
+  const tagId = Number(new URLSearchParams(location.search).get("tagId"));
+  if (!Number.isInteger(tagId)) return;
+  if (!state.tags.some((tag) => tag.id === tagId && !isSmokeTagName(tag.name))) return;
+  await activateTaxonomyTag(tagId);
+}
+
+async function activateTaxonomyTag(tagId) {
+  clearFlash(find("#taxonomy-message"));
+  state.activeTaxonomyTagId = tagId;
+  renderTaxonomyList();
+  try {
+    const response = await apiFetch(`/api/links?tagIds=${tagId}`);
+    state.taxonomyLinks = response.items || [];
+    renderTaxonomyResults();
+  } catch (error) {
+    state.taxonomyLinks = [];
+    renderTaxonomyResults();
+    flash(find("#taxonomy-message"), error.message, true);
+  }
 }
 
 function renderNewPreview() {
@@ -370,6 +391,10 @@ function renderLinkGrid(container, items, options = {}) {
           <p class="card-description">${escapeHtml(description)}</p>
           <div class="card-tag-row">
             ${tags.length > 0 ? tags.map((tag) => `<span class="tag-pill">${escapeHtml(tag.name)}</span>`).join("") : `<span class="tag-pill muted-tag">未标记</span>`}
+          </div>
+          <div class="card-action-row">
+            <a class="card-action-button card-open-button" href="${escapeAttribute(item.url)}" target="_blank" rel="noreferrer">打开</a>
+            <a class="card-action-button card-detail-button" href="/link?id=${item.id}">详情</a>
           </div>
           <div class="card-meta-row">
             <span>${escapeHtml(formatShortDate(item.updated_at))}</span>
