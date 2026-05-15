@@ -5,6 +5,7 @@ const state = {
   draftTagNames: [],
   activeTaxonomyTagId: null,
   taxonomyLinks: [],
+  currentLink: null,
   showAllTags: false,
 };
 
@@ -56,6 +57,8 @@ async function initIndexPage() {
   find("#status-filter").addEventListener("change", loadLinks);
   find("#tag-filter").addEventListener("click", (event) => handleFilterTagToggle(event, loadLinks));
 
+  find("#link-grid").addEventListener("click", (event) => handleCardArchiveClick(event, loadLinks));
+
   await loadLinks();
 }
 
@@ -95,6 +98,7 @@ async function initLinkPage() {
 
   await loadTags();
   const response = await apiFetch(`/api/links/${id}`);
+  state.currentLink = response.item;
   populateLinkDetail(response.item);
   state.draftTagNames = response.item.tags.map((tag) => tag.name);
   bindTagEditor({
@@ -110,6 +114,7 @@ async function initLinkPage() {
       finalizeTagEditor(find("#detail-tag-editor"));
       const payload = serializeLinkForm(find("#detail-form"));
       const saveResponse = await apiFetch(`/api/links/${id}`, { method: "PATCH", body: payload });
+      state.currentLink = saveResponse.item;
       populateLinkDetail(saveResponse.item);
       state.draftTagNames = saveResponse.item.tags.map((tag) => tag.name);
       bindTagEditor({
@@ -131,6 +136,10 @@ async function initLinkPage() {
     } catch (error) {
       flash(find("#short-link-output"), error.message, true);
     }
+  });
+  find("#archive-link-button").addEventListener("click", async () => {
+    const archived = await archiveCurrentDetailLink();
+    if (archived) location.href = "/";
   });
 }
 
@@ -157,6 +166,8 @@ async function initTaxonomyPage() {
       flash(find("#tag-message"), error.message, true);
     }
   });
+
+  find("#taxonomy-link-grid").addEventListener("click", (event) => handleCardArchiveClick(event, () => reloadActiveTaxonomyTag()));
 
   find("#tag-list").addEventListener("click", async (event) => {
     const button = event.target.closest("[data-taxonomy-tag-id]");
@@ -229,6 +240,7 @@ function populateLinkDetail(item) {
   find("#detail-note").value = item.note || "";
   find("#detail-status").value = item.status;
   find("#open-original-link").href = item.url;
+  renderDetailArchiveButton(item);
   if (item.short_code) {
     const shortUrl = `${location.origin}/s/${item.short_code}`;
     renderShortLink(find("#short-link-output"), shortUrl, "已生成短链：");
@@ -239,6 +251,13 @@ function populateLinkDetail(item) {
   }
 }
 
+function renderDetailArchiveButton(item) {
+  const button = find("#archive-link-button");
+  if (!button) return;
+  const isArchived = item.status === "archived";
+  button.disabled = isArchived;
+  button.textContent = isArchived ? "已归档" : "删除链接";
+}
 function renderDetailTagLinks(tags) {
   const container = find("#detail-tag-links");
   if (!container) return;
@@ -308,7 +327,7 @@ async function activateTaxonomyTag(tagId) {
   state.activeTaxonomyTagId = tagId;
   renderTaxonomyList();
   try {
-    const response = await apiFetch(`/api/links?tagIds=${tagId}`);
+    const response = await apiFetch(`/api/links?tagIds=${tagId}&status=active`);
     state.taxonomyLinks = response.items || [];
     renderTaxonomyResults();
   } catch (error) {
@@ -378,7 +397,7 @@ function renderLinkGrid(container, items, options = {}) {
     const description = item.summary || item.note || formatHost(item.url);
     const tags = Array.isArray(item.tags) ? item.tags.filter((tag) => !isSmokeTagName(tag.name)).slice(0, 3) : [];
     return `
-      <article class="link-card collection-card">
+      <article class="link-card collection-card" data-link-item="${escapeAttribute(JSON.stringify(item))}">
         ${renderVisualMarkup(item, "card")}
         <div class="collection-card-body">
           <div class="link-card-top">
@@ -395,6 +414,7 @@ function renderLinkGrid(container, items, options = {}) {
           <div class="card-action-row">
             <a class="card-action-button card-open-button" href="${escapeAttribute(item.url)}" target="_blank" rel="noreferrer">打开</a>
             <a class="card-action-button card-detail-button" href="/link?id=${item.id}">详情</a>
+            ${item.status === "archived" ? "" : `<button class="card-action-button card-delete-button" type="button" data-archive-link-id="${item.id}">删除</button>`}
           </div>
           <div class="card-meta-row">
             <span>${escapeHtml(formatShortDate(item.updated_at))}</span>
@@ -406,6 +426,57 @@ function renderLinkGrid(container, items, options = {}) {
   }).join("");
 }
 
+async function handleCardArchiveClick(event, reloadCallback) {
+  const button = event.target.closest("[data-archive-link-id]");
+  if (!button) return;
+  const linkId = Number(button.dataset.archiveLinkId);
+  if (!Number.isInteger(linkId)) return;
+  const card = button.closest(".collection-card");
+  const item = readLinkItemFromCard(card);
+  if (!item) return;
+  const archived = await archiveLinkWithConfirmation(item, "删除后会移到归档，仍可在归档里找回。确定删除这张卡片吗？");
+  if (archived && reloadCallback) await reloadCallback();
+}
+
+async function archiveCurrentDetailLink() {
+  if (!state.currentLink) return false;
+  return archiveLinkWithConfirmation(state.currentLink, "删除后会移到归档，仍可在归档里找回。确定删除当前链接吗？");
+}
+
+async function archiveLinkWithConfirmation(item, message) {
+  if (item.status === "archived") return false;
+  if (!confirm(message)) return false;
+  await apiFetch(`/api/links/${item.id}`, { method: "PATCH", body: toArchivePayload(item) });
+  return true;
+}
+
+function toArchivePayload(item) {
+  return {
+    url: item.url,
+    title: item.title,
+    siteName: item.site_name,
+    faviconUrl: item.favicon_url,
+    coverImageUrl: item.cover_image_url,
+    summary: item.summary,
+    note: item.note,
+    status: "archived",
+    tagNames: Array.isArray(item.tags) ? item.tags.map((tag) => tag.name) : [],
+  };
+}
+
+function readLinkItemFromCard(card) {
+  if (!card?.dataset.linkItem) return null;
+  try {
+    return JSON.parse(card.dataset.linkItem);
+  } catch {
+    return null;
+  }
+}
+
+async function reloadActiveTaxonomyTag() {
+  if (state.activeTaxonomyTagId == null) return;
+  await activateTaxonomyTag(state.activeTaxonomyTagId);
+}
 function renderShortLink(element, shortUrl, prefix) {
   element.innerHTML = `${escapeHtml(prefix)}<a class="text-link" href="${shortUrl}" target="_blank" rel="noreferrer">${escapeHtml(shortUrl)}</a>`;
 }

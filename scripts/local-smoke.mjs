@@ -34,6 +34,18 @@ async function addTagToken(rootSelector, value) {
   await input.press("Enter");
 }
 
+async function withNextDialog(accept, action) {
+  const dialogPromise = page.waitForEvent("dialog");
+  const actionPromise = action();
+  const dialog = await dialogPromise;
+  if (accept) {
+    await dialog.accept();
+  } else {
+    await dialog.dismiss();
+  }
+  await actionPromise;
+}
+
 try {
   await page.goto(`${baseUrl}/login`, { waitUntil: "networkidle" });
   await page.fill('input[name="password"]', smokePassword);
@@ -152,6 +164,11 @@ try {
   assert.ok(detailHref && /\/link\?id=\d+$/.test(detailHref), "title should open detail page");
   assert.equal(openButtonHref, sourceHref, "open button should point to external url");
   assert.equal(detailButtonHref, detailHref, "detail button should point to detail page");
+  await page.waitForSelector("#link-grid .card-delete-button", { timeout: 15000 });
+  const activeCountBeforeCancel = await page.locator("#link-grid .link-card").count();
+  await withNextDialog(false, async () => page.locator("#link-grid .card-delete-button").first().click());
+  await page.waitForTimeout(500);
+  assert.equal(await page.locator("#link-grid .link-card").count(), activeCountBeforeCancel, "cancelled soft delete should keep active card visible");
 
   await page.selectOption("#status-filter", "archived");
   await page.waitForTimeout(500);
@@ -179,6 +196,25 @@ try {
 
   await page.locator('#tag-list [data-taxonomy-tag-id]').filter({ hasText: tagName }).click();
   await page.waitForFunction(() => document.querySelector("#taxonomy-link-grid")?.classList.contains("hidden"));
+
+  await page.goto(new URL(detailTagHref, baseUrl).toString(), { waitUntil: "networkidle" });
+  await page.waitForSelector("#taxonomy-link-grid .card-delete-button", { timeout: 15000 });
+  await withNextDialog(true, async () => page.locator("#taxonomy-link-grid .card-delete-button").first().click());
+  await page.waitForTimeout(500);
+  const taxonomyAfterSoftDelete = await page.locator("#taxonomy-link-grid").textContent();
+  assert.ok(!taxonomyAfterSoftDelete || !taxonomyAfterSoftDelete.includes("Example Domain"), "confirmed soft delete should remove card from active taxonomy result");
+
+  await page.goto(`${baseUrl}/`, { waitUntil: "networkidle" });
+  await page.selectOption("#status-filter", "archived");
+  await page.fill("#search-input", noteValue);
+  await page.waitForTimeout(500);
+  const archivedAfterSoftDelete = await page.locator("#link-grid").textContent();
+  assert.ok(archivedAfterSoftDelete && archivedAfterSoftDelete.includes("Example Domain"), "soft-deleted link should remain visible in archived filter");
+  assert.equal(await page.locator("#link-grid .card-delete-button").count(), 0, "archived cards should not show delete buttons");
+
+  await page.goto(detailUrl, { waitUntil: "networkidle" });
+  await page.waitForSelector("#archive-link-button", { timeout: 15000 });
+  assert.equal(await page.locator("#archive-link-button").isDisabled(), true, "archived detail delete button should be disabled");
 
   console.log(JSON.stringify({
     ok: true,
