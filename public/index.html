@@ -22,28 +22,29 @@
         <button id="logout-button" class="ghost-button" type="button">退出登录</button>
       </aside>
       <main class="panel">
-        <section class="hero-card compact">
-          <div class="hero-copy-stack">
-            <p class="eyebrow eyebrow-pill">Library</p>
-            <h2 class="hero-title-block">检索你的网页资产</h2>
+        <section class="collection-toolbar">
+          <div class="collection-heading">
+            <p class="eyebrow">Library Wall</p>
+            <h2>收藏墙</h2>
           </div>
-          <div class="filters filter-shell">
-            <input id="search-input" class="field" type="search" placeholder="搜索标题、URL 或备注" />
-            <select id="status-filter" class="field">
+          <div class="collection-actions">
+            <input id="search-input" class="field search-field" type="search" placeholder="搜索标题、URL、备注" />
+            <select id="status-filter" class="field status-field">
               <option value="active">活跃</option>
               <option value="archived">归档</option>
-              <option value="">全部状态</option>
+              <option value="">全部</option>
             </select>
-            <div id="tag-filter" class="tag-cluster soft-panel tag-filter-shell"></div>
+            <a class="primary-button compact-button" href="/new">新增</a>
           </div>
+          <div id="tag-filter" class="tag-cluster tag-filter-strip"></div>
         </section>
-        <section>
-          <div class="section-heading">
-            <h3 class="section-title-pill">链接卡片</h3>
-            <p id="list-hint" class="muted hint-pill">加载中...</p>
+        <section class="collection-section">
+          <div class="section-heading collection-count-row">
+            <h3>全部收藏</h3>
+            <p id="list-hint" class="muted">加载中...</p>
           </div>
           <p id="list-message" class="muted message-slot message-pill"></p>
-          <div id="link-grid" class="link-grid"></div>
+          <div id="link-grid" class="link-grid collection-grid"></div>
         </section>
       </main>
     </div>

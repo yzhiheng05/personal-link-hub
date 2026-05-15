@@ -22,13 +22,17 @@
         <button id="logout-button" class="ghost-button" type="button">退出登录</button>
       </aside>
       <main class="panel panel-wide">
-        <section class="hero-card compact">
-          <div class="hero-copy-stack">
-            <p class="eyebrow eyebrow-pill">Metrics</p>
-            <h2 id="detail-title" class="hero-title-block">载入中...</h2>
-            <p id="detail-summary-text" class="muted soft-panel hero-summary-block"></p>
+        <section class="detail-showcase">
+          <div id="detail-visual" class="detail-visual"></div>
+          <div class="detail-showcase-copy">
+            <p id="detail-site-label" class="eyebrow">Loading</p>
+            <h2 id="detail-title">载入中...</h2>
+            <p id="detail-summary-text" class="muted detail-summary-text"></p>
+            <div class="detail-quick-actions">
+              <a id="open-original-link" class="text-link action-link-block" href="#" target="_blank" rel="noreferrer">打开原始链接</a>
+            </div>
+            <div id="detail-meta" class="stats-row"></div>
           </div>
-          <div id="detail-meta" class="stats-row"></div>
         </section>
         <section class="editor-grid">
           <form id="detail-form" class="stack-form surface-card content-form">
@@ -59,7 +63,6 @@
               <p id="existing-short-link" class="muted message-slot message-pill"></p>
               <button id="generate-short-link" class="primary-button" type="button">生成短链</button>
               <p id="short-link-output" class="muted message-slot message-pill"></p>
-              <a id="open-original-link" class="text-link action-link-block" href="#" target="_blank" rel="noreferrer">打开原始链接</a>
             </div>
           </aside>
         </section>

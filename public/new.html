@@ -11,8 +11,8 @@
       <aside class="rail">
         <div>
           <p class="eyebrow">Capture</p>
-          <h1>新增链接</h1>
-          <p class="rail-copy">直接录入核心信息，保存后再按需补充更多元数据。</p>
+          <h1>创建收藏卡片</h1>
+          <p class="rail-copy">边写边预览，把链接整理成可以长期使用的资料卡。</p>
         </div>
         <nav class="nav">
           <a class="nav-link" href="/">卡片流</a>
@@ -21,31 +21,52 @@
         </nav>
         <button id="logout-button" class="ghost-button" type="button">退出登录</button>
       </aside>
-      <main class="panel panel-wide">
-        <section class="editor-grid">
-          <form id="link-form" class="stack-form surface-card content-form">
-            <h3 class="section-title-pill">保存链接</h3>
-            <label class="form-field"><span class="field-label-pill">URL</span><input id="url" name="url" class="field" type="url" required /></label>
-            <label class="form-field"><span class="field-label-pill">标题</span><input id="title" name="title" class="field" type="text" /></label>
-            <label class="form-field"><span class="field-label-pill">备注</span><textarea id="note" name="note" class="field textarea"></textarea></label>
-            <div class="form-field">
-              <span class="field-label-pill">标签</span>
-              <div id="tag-editor" class="tag-editor"></div>
+      <main class="panel panel-wide new-workbench">
+        <section class="new-workbench-layout">
+          <form id="link-form" class="surface-card content-form new-card-form">
+            <div class="form-section">
+              <div class="form-section-heading">
+                <p class="eyebrow">Core</p>
+                <h2>核心信息</h2>
+              </div>
+              <label class="form-field"><span class="field-label-pill">URL</span><input id="url" name="url" class="field" type="url" placeholder="https://example.com" required /></label>
+              <label class="form-field"><span class="field-label-pill">标题</span><input id="title" name="title" class="field" type="text" placeholder="给这张收藏卡起个名字" /></label>
+              <label class="form-field"><span class="field-label-pill">摘要</span><textarea id="summary" name="summary" class="field textarea compact-textarea" placeholder="一句话说明它为什么值得收藏"></textarea></label>
             </div>
-            <button class="primary-button" type="submit">保存链接</button>
-            <p id="save-message" class="muted message-slot message-pill"></p>
+
+            <div class="form-section">
+              <div class="form-section-heading">
+                <p class="eyebrow">Visual</p>
+                <h2>视觉信息</h2>
+              </div>
+              <label class="form-field"><span class="field-label-pill">封面图 URL</span><input id="cover" name="coverImageUrl" class="field" type="url" placeholder="可选，留空会生成站点牌" /></label>
+            </div>
+
+            <div class="form-section">
+              <div class="form-section-heading">
+                <p class="eyebrow">Organize</p>
+                <h2>整理信息</h2>
+              </div>
+              <label class="form-field"><span class="field-label-pill">备注</span><textarea id="note" name="note" class="field textarea compact-textarea" placeholder="只给自己看的补充说明"></textarea></label>
+              <div class="form-field">
+                <span class="field-label-pill">标签</span>
+                <div id="tag-editor" class="tag-editor"></div>
+              </div>
+            </div>
+
+            <div class="new-form-actions">
+              <button class="primary-button" type="submit">保存链接</button>
+              <p id="save-message" class="muted message-slot message-pill"></p>
+            </div>
           </form>
-          <aside class="surface-card notes-card content-note-card">
-            <h3 class="section-title-pill">第一版约束</h3>
-            <div class="soft-panel">
-              <ul class="clean-list">
-                <li>新增页只录入核心字段</li>
-                <li>标签是第一版唯一组织方式</li>
-                <li>详情页可再补充元数据</li>
-                <li>短链生成与保存分开触发</li>
-                <li>默认允许重复 URL，但会提示</li>
-              </ul>
+
+          <aside class="preview-panel">
+            <div class="preview-panel-head">
+              <p class="eyebrow">Live Preview</p>
+              <h2>收藏墙预览</h2>
+              <p class="muted">这里显示保存后大概会出现在首页的样子，不会提前写入数据库。</p>
             </div>
+            <div id="new-preview-card" class="preview-card-shell collection-grid"></div>
           </aside>
         </section>
       </main>

@@ -22,9 +22,11 @@ page.on("pageerror", (err) => {
 });
 
 const unique = Date.now();
-const tagName = `联调标签-${unique}`;
-const secondTag = `自动创建-${unique}`;
+const tagName = `smoke-${unique}`;
+const secondTag = `auto-${unique}`;
 const noteValue = `联调备注-${unique}`;
+const summaryValue = `收藏摘要-${unique}`;
+const coverValue = "https://example.com/example.png";
 
 async function addTagToken(rootSelector, value) {
   const input = page.locator(`${rootSelector} .tag-editor-input`);
@@ -62,9 +64,16 @@ try {
 
   await page.fill("#url", "https://example.com/");
   await page.fill("#title", "Example Domain");
+  await page.fill("#summary", summaryValue);
+  await page.fill("#cover", coverValue);
   await page.fill("#note", noteValue);
   await addTagToken("#tag-editor", tagName);
   await addTagToken("#tag-editor", `${secondTag}，`);
+  await page.waitForSelector("#new-preview-card .collection-card", { timeout: 15000 });
+  const previewText = await page.locator("#new-preview-card").textContent();
+  assert.ok(previewText && previewText.includes("Example Domain"), "new page preview should show title");
+  assert.ok(previewText && previewText.includes(summaryValue), "new page preview should show summary");
+  assert.ok(previewText && previewText.includes(tagName), "new page preview should show tag chip");
   await page.click('#link-form button[type="submit"]');
   await page.waitForURL(/\/link\?id=\d+$/, { timeout: 15000 });
   await page.waitForLoadState("networkidle");
@@ -74,6 +83,11 @@ try {
   assert.ok(detailTitle && detailTitle.trim().length > 0, "detail title should exist");
   const detailNote = await page.locator("#detail-note").inputValue();
   assert.equal(detailNote, noteValue, "detail note should persist");
+  const detailSummary = await page.locator("#detail-summary").inputValue();
+  assert.equal(detailSummary, summaryValue, "detail summary should persist");
+  const detailCover = await page.locator("#detail-cover").inputValue();
+  assert.equal(detailCover, coverValue, "detail cover should persist");
+  await page.waitForSelector("#detail-visual.collection-visual-detail", { timeout: 15000 });
   const detailChips = await page.locator("#detail-tag-editor .tag-chip").allTextContents();
   assert.ok(detailChips.some((text) => text.includes(tagName)), "existing tag should render as chip");
   assert.ok(detailChips.some((text) => text.includes(secondTag)), "auto-created tag should render as chip");
@@ -96,7 +110,7 @@ try {
   await shortPage.close();
 
   await page.reload({ waitUntil: "networkidle" });
-  const visitCountText = await page.locator("#detail-meta .stat").nth(2).textContent();
+  const visitCountText = await page.locator("#detail-meta .stat", { hasText: "访问" }).textContent();
   assert.ok(visitCountText && /[1-9]/.test(visitCountText), "visit count should be updated");
   const existingShortLinkText = await page.locator("#existing-short-link").textContent();
   assert.ok(existingShortLinkText && existingShortLinkText.includes("/s/"), "existing short link should display");
@@ -104,6 +118,8 @@ try {
   await page.goto(`${baseUrl}/new`, { waitUntil: "networkidle" });
   await page.fill("#url", "https://example.com/");
   await page.fill("#title", "Example Domain");
+  await page.fill("#summary", summaryValue);
+  await page.fill("#cover", coverValue);
   await page.fill("#note", `${noteValue}-duplicate`);
   await addTagToken("#tag-editor", tagName);
   await page.click('#link-form button[type="submit"]');
@@ -114,7 +130,13 @@ try {
   await page.waitForTimeout(500);
   const listText = await page.locator("#link-grid").textContent();
   assert.ok(listText && listText.includes("Example Domain"), "search should find saved link by note");
+  assert.ok(listText && listText.includes(summaryValue), "collection card should show summary");
+  await page.waitForSelector("#link-grid .collection-visual-card", { timeout: 15000 });
 
+  const tagFilterButton = page.locator('#tag-filter button[data-tag-id]').filter({ hasText: tagName });
+  if ((await tagFilterButton.count()) === 0) {
+    await page.locator('#tag-filter [data-tag-more]').click();
+  }
   await page.locator('#tag-filter button[data-tag-id]').filter({ hasText: tagName }).click();
   await page.waitForTimeout(500);
   const tagFilteredCount = await page.locator("#link-grid .link-card").count();
@@ -131,6 +153,7 @@ try {
   assert.ok(archivedText && archivedText.includes("archived"), "status filter should work");
 
   await page.goto(`${baseUrl}/taxonomy`, { waitUntil: "networkidle" });
+  await page.waitForSelector("#taxonomy-empty-state:not(.hidden)", { timeout: 15000 });
   await page.locator('#tag-list [data-taxonomy-tag-id]').filter({ hasText: tagName }).click();
   await page.waitForSelector("#taxonomy-link-grid .link-card", { timeout: 15000 });
   const taxonomyHint = await page.locator("#taxonomy-results-hint").textContent();
@@ -156,3 +179,4 @@ try {
 } finally {
   await browser.close();
 }
+

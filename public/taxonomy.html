@@ -11,8 +11,8 @@
       <aside class="rail">
         <div>
           <p class="eyebrow">Taxonomy</p>
-          <h1>标签管理</h1>
-          <p class="rail-copy">用标签组织第一版链接资产，保持简单清晰。</p>
+          <h1>标签浏览</h1>
+          <p class="rail-copy">用标签快速翻出收藏，不把页面做成沉重的管理后台。</p>
         </div>
         <nav class="nav">
           <a class="nav-link" href="/">卡片流</a>
@@ -21,25 +21,39 @@
         </nav>
         <button id="logout-button" class="ghost-button" type="button">退出登录</button>
       </aside>
-      <main class="panel panel-wide">
-        <section class="taxonomy-layout">
-          <div class="surface-card content-note-card">
-            <h2 class="section-title-pill">标签</h2>
-            <form id="tag-form" class="inline-form">
-              <input id="tag-name" class="field field-grow" type="text" placeholder="例如：AI / 前端 / 收藏" />
-              <button class="primary-button" type="submit">新增标签</button>
+      <main class="panel panel-wide taxonomy-browser">
+        <section class="taxonomy-browser-layout">
+          <aside class="taxonomy-panel taxonomy-tag-panel">
+            <div class="taxonomy-panel-head">
+              <div>
+                <p class="eyebrow">Tags</p>
+                <h2>标签</h2>
+              </div>
+              <span class="taxonomy-count-pill" id="taxonomy-tag-count">0 个</span>
+            </div>
+            <form id="tag-form" class="taxonomy-add-form">
+              <input id="tag-name" class="field field-grow" type="text" placeholder="新增标签，例如 AI / 前端" />
+              <button class="primary-button" type="submit">添加</button>
             </form>
             <p id="tag-message" class="muted message-slot message-pill"></p>
-            <div id="tag-list" class="list-stack"></div>
-          </div>
-          <div class="surface-card content-note-card taxonomy-results-card">
-            <div class="section-heading">
-              <h2 id="taxonomy-results-title" class="section-title-pill">点击上方标签查看结果</h2>
+            <div id="tag-list" class="taxonomy-cloud"></div>
+          </aside>
+
+          <section class="taxonomy-panel taxonomy-results-panel">
+            <div class="taxonomy-results-head">
+              <div>
+                <p class="eyebrow">Collection</p>
+                <h2 id="taxonomy-results-title">选择一个标签查看收藏</h2>
+              </div>
               <p id="taxonomy-results-hint" class="muted hint-pill"></p>
             </div>
             <p id="taxonomy-message" class="muted message-slot message-pill"></p>
-            <div id="taxonomy-link-grid" class="link-grid hidden"></div>
-          </div>
+            <div id="taxonomy-empty-state" class="taxonomy-empty-state">
+              <strong>从左侧点一个标签</strong>
+              <span>相关收藏会在这里展开，再点一次同一标签可以收起。</span>
+            </div>
+            <div id="taxonomy-link-grid" class="link-grid collection-grid hidden"></div>
+          </section>
         </section>
       </main>
     </div>
