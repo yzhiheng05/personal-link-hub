@@ -30,7 +30,7 @@ async function initLoginPage() {
     event.preventDefault();
     clearFlash(find("#login-message"));
     try {
-      const payload = Object.fromEntries(new FormData(form).entries());
+      const payload = { password: new FormData(form).get("password") };
       const response = await apiFetch("/api/auth/login", { method: "POST", body: payload });
       if (response.ok) {
         location.href = new URLSearchParams(location.search).get("redirect") || "/";

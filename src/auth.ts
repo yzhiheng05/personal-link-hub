@@ -13,6 +13,10 @@ export async function sha256Hex(value: string): Promise<string> {
   return bytesToHex(new Uint8Array(digest));
 }
 
+export async function deriveSessionSecret(password: string): Promise<string> {
+  return sha256Hex(`linkhub-session:${password}`);
+}
+
 export async function createSessionToken(username: string, secret: string): Promise<string> {
   const expiresAt = Math.floor(Date.now() / 1000) + SESSION_TTL_SECONDS;
   const message = `${username}.${expiresAt}`;

@@ -1,4 +1,4 @@
-import { buildSessionCookie, clearSessionCookie, createSessionToken, readSession, sha256Hex } from "./auth";
+import { buildSessionCookie, clearSessionCookie, createSessionToken, deriveSessionSecret, readSession } from "./auth";
 import {
   createLink,
   createTag,
@@ -17,9 +17,7 @@ import { assertPublicHttpUrl } from "./metadata";
 interface Env {
   ASSETS: Fetcher;
   DB: D1Database;
-  ADMIN_USERNAME: string;
-  ADMIN_PASSWORD_HASH: string;
-  SESSION_SECRET: string;
+  ADMIN_PASSWORD: string;
 }
 
 const PUBLIC_API_ROUTES = new Set(["/api/auth/login", "/api/auth/logout", "/api/auth/me"]);
@@ -29,12 +27,13 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     try {
       validateConfig(env);
+      const sessionSecret = await getSessionSecret(env);
       const url = new URL(request.url);
       const pathname = url.pathname;
       const useSecureCookie = url.protocol === "https:";
 
       if (pathname === "/api/auth/login" && request.method === "POST") {
-        return await handleLogin(request, env, useSecureCookie);
+        return await handleLogin(request, env, useSecureCookie, sessionSecret);
       }
 
       if (pathname === "/api/auth/logout" && request.method === "POST") {
@@ -42,7 +41,7 @@ export default {
       }
 
       if (pathname === "/api/auth/me" && request.method === "GET") {
-        const session = await readSession(request, env.SESSION_SECRET);
+        const session = await readSession(request, sessionSecret);
         return json({ authenticated: Boolean(session), username: session?.username ?? null });
       }
 
@@ -50,7 +49,7 @@ export default {
         return await handleShortLink(pathname, env);
       }
 
-      const session = await readSession(request, env.SESSION_SECRET);
+      const session = await readSession(request, sessionSecret);
 
       if (pathname.startsWith("/api/") && !PUBLIC_API_ROUTES.has(pathname)) {
         if (!session) return errorResponse(401, "需要先登录。");
@@ -73,25 +72,19 @@ export default {
   },
 };
 
-async function handleLogin(request: Request, env: Env, useSecureCookie: boolean): Promise<Response> {
-  const body = await readJson<{ username?: string; password?: string }>(request);
-  const username = String(body.username ?? "").trim();
+async function handleLogin(request: Request, env: Env, useSecureCookie: boolean, sessionSecret: string): Promise<Response> {
+  const body = await readJson<{ password?: string }>(request);
   const password = String(body.password ?? "");
 
-  if (!username || !password) {
-    throw new HttpError(400, "用户名和密码不能为空。");
+  if (!password) {
+    throw new HttpError(400, "密码不能为空。");
   }
-  if (username !== env.ADMIN_USERNAME) {
-    throw new HttpError(401, "用户名或密码错误。");
-  }
-
-  const passwordHash = await sha256Hex(password);
-  if (passwordHash !== env.ADMIN_PASSWORD_HASH) {
-    throw new HttpError(401, "用户名或密码错误。");
+  if (password !== env.ADMIN_PASSWORD) {
+    throw new HttpError(401, "密码错误。");
   }
 
-  const token = await createSessionToken(username, env.SESSION_SECRET);
-  return json({ ok: true, username }, { headers: { "Set-Cookie": buildSessionCookie(token, useSecureCookie) } });
+  const token = await createSessionToken("admin", sessionSecret);
+  return json({ ok: true, username: "admin" }, { headers: { "Set-Cookie": buildSessionCookie(token, useSecureCookie) } });
 }
 
 async function handleApi(request: Request, env: Env, pathname: string, url: URL): Promise<Response> {
@@ -177,9 +170,13 @@ async function serveAsset(request: Request, env: Env, pathname: string): Promise
 }
 
 function validateConfig(env: Env): void {
-  if (!env.ADMIN_USERNAME || !env.ADMIN_PASSWORD_HASH || !env.SESSION_SECRET) {
-    throw new Error("Missing ADMIN_USERNAME, ADMIN_PASSWORD_HASH, or SESSION_SECRET environment variables.");
+  if (!env.ADMIN_PASSWORD) {
+    throw new Error("Missing ADMIN_PASSWORD environment variable.");
   }
+}
+
+async function getSessionSecret(env: Env): Promise<string> {
+  return deriveSessionSecret(env.ADMIN_PASSWORD);
 }
 
 function assertValidLinkPayload(payload: ReturnType<typeof normalizeLinkInput>): void {

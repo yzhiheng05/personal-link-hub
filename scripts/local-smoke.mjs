@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { chromium } from "playwright-core";
 
 const baseUrl = process.env.BASE_URL ?? "http://127.0.0.1:8787";
-const smokeUsername = process.env.SMOKE_USERNAME ?? "admin";
 const smokePassword = process.env.SMOKE_PASSWORD ?? "admin123";
 const browser = await chromium.launch({
   headless: true,
@@ -28,7 +27,6 @@ const noteValue = `联调备注-${unique}`;
 
 try {
   await page.goto(`${baseUrl}/login`, { waitUntil: "networkidle" });
-  await page.fill('input[name="username"]', smokeUsername);
   await page.fill('input[name="password"]', smokePassword);
   await page.click('button[type="submit"]');
   await page.waitForURL(`${baseUrl}/`, { timeout: 15000 });
