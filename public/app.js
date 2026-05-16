@@ -57,6 +57,7 @@ async function initIndexPage() {
   find("#status-filter").addEventListener("change", loadLinks);
   find("#tag-filter").addEventListener("click", (event) => handleFilterTagToggle(event, loadLinks));
 
+  find("#link-grid").addEventListener("click", (event) => handleTrackedOpenClick(event, "#list-message"));
   find("#link-grid").addEventListener("click", (event) => handleCardArchiveClick(event, loadLinks));
 
   await loadLinks();
@@ -141,6 +142,7 @@ async function initLinkPage() {
     const archived = await archiveCurrentDetailLink();
     if (archived) location.href = "/";
   });
+  find("#open-original-link").addEventListener("click", (event) => handleTrackedOpenClick(event, "#detail-message"));
 }
 
 async function initTaxonomyPage() {
@@ -167,6 +169,7 @@ async function initTaxonomyPage() {
     }
   });
 
+  find("#taxonomy-link-grid").addEventListener("click", (event) => handleTrackedOpenClick(event, "#taxonomy-message"));
   find("#taxonomy-link-grid").addEventListener("click", (event) => handleCardArchiveClick(event, () => reloadActiveTaxonomyTag()));
 
   find("#tag-list").addEventListener("click", async (event) => {
@@ -239,7 +242,10 @@ function populateLinkDetail(item) {
   find("#detail-summary").value = item.summary || "";
   find("#detail-note").value = item.note || "";
   find("#detail-status").value = item.status;
-  find("#open-original-link").href = item.url;
+  const openOriginalLink = find("#open-original-link");
+  openOriginalLink.href = item.url;
+  openOriginalLink.dataset.openLinkId = String(item.id);
+  openOriginalLink.dataset.openUrl = item.url;
   renderDetailArchiveButton(item);
   if (item.short_code) {
     const shortUrl = `${location.origin}/s/${item.short_code}`;
@@ -401,7 +407,7 @@ function renderLinkGrid(container, items, options = {}) {
         ${renderVisualMarkup(item, "card")}
         <div class="collection-card-body">
           <div class="link-card-top">
-            <a class="card-source-link" href="${escapeAttribute(item.url)}" target="_blank" rel="noreferrer">${escapeHtml(sourceLabel)}</a>
+            <a class="card-source-link" href="${escapeAttribute(item.url)}" target="_blank" rel="noreferrer" data-open-link-id="${item.id}" data-open-url="${escapeAttribute(item.url)}">${escapeHtml(sourceLabel)}</a>
             <span class="status-pill ${item.status}">${item.status}</span>
           </div>
           <a class="card-title-link" href="/link?id=${item.id}">
@@ -412,7 +418,7 @@ function renderLinkGrid(container, items, options = {}) {
             ${tags.length > 0 ? tags.map((tag) => `<span class="tag-pill">${escapeHtml(tag.name)}</span>`).join("") : `<span class="tag-pill muted-tag">未标记</span>`}
           </div>
           <div class="card-action-row">
-            <a class="card-action-button card-open-button" href="${escapeAttribute(item.url)}" target="_blank" rel="noreferrer">打开</a>
+            <a class="card-action-button card-open-button" href="${escapeAttribute(item.url)}" target="_blank" rel="noreferrer" data-open-link-id="${item.id}" data-open-url="${escapeAttribute(item.url)}">打开</a>
             <a class="card-action-button card-detail-button" href="/link?id=${item.id}">详情</a>
             ${item.status === "archived" ? "" : `<button class="card-action-button card-delete-button" type="button" data-archive-link-id="${item.id}">删除</button>`}
           </div>
@@ -436,6 +442,48 @@ async function handleCardArchiveClick(event, reloadCallback) {
   if (!item) return;
   const archived = await archiveLinkWithConfirmation(item, "删除后会移到归档，仍可在归档里找回。确定删除这张卡片吗？");
   if (archived && reloadCallback) await reloadCallback();
+}
+
+async function handleTrackedOpenClick(event, messageSelector) {
+  const source = event.target instanceof Element ? event.target : event.target?.parentElement;
+  const trigger = source?.closest("[data-open-link-id][data-open-url]");
+  if (!trigger) return;
+
+  event.preventDefault();
+  const linkId = Number(trigger.dataset.openLinkId);
+  const fallbackUrl = String(trigger.dataset.openUrl || "");
+  if (!Number.isInteger(linkId) || !fallbackUrl) return;
+
+  const messageEl = find(messageSelector);
+  clearFlash(messageEl);
+
+  const target = trigger.getAttribute("target") || "";
+  const shouldOpenInNewTab = target === "_blank";
+  let popup = null;
+
+  if (shouldOpenInNewTab) {
+    popup = window.open("about:blank", "_blank");
+    if (!popup) {
+      flash(messageEl, "浏览器拦截了新窗口，请允许弹窗后重试。", true);
+      return;
+    }
+  }
+
+  try {
+    const response = await apiFetch(`/api/links/${linkId}/visit`, { method: "POST" });
+    const destination = String(response.url || fallbackUrl);
+
+    if (popup) {
+      popup.opener = null;
+      popup.location.replace(destination);
+      return;
+    }
+
+    location.href = destination;
+  } catch (error) {
+    if (popup && !popup.closed) popup.close();
+    flash(messageEl, error.message, true);
+  }
 }
 
 async function archiveCurrentDetailLink() {

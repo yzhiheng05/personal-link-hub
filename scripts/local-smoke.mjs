@@ -28,6 +28,26 @@ const noteValue = `联调备注-${unique}`;
 const summaryValue = `收藏摘要-${unique}`;
 const coverValue = "https://example.com/example.png";
 
+function extractVisitCount(text) {
+  const match = String(text || "").match(/访问\s*(\d+)/);
+  return match ? Number(match[1]) : NaN;
+}
+
+async function readDetailVisitCount() {
+  const text = await page.locator("#detail-meta .stat", { hasText: "访问" }).textContent();
+  const count = extractVisitCount(text);
+  assert.ok(Number.isInteger(count), `detail visit count should be readable, got: ${text}`);
+  return count;
+}
+
+async function clickLinkAndClosePopup(locator) {
+  const popupPromise = page.waitForEvent("popup");
+  await locator.click();
+  const popup = await popupPromise;
+  await popup.waitForURL("https://example.com/", { timeout: 20000 });
+  await popup.close();
+}
+
 async function addTagToken(rootSelector, value) {
   const input = page.locator(`${rootSelector} .tag-editor-input`);
   await input.fill(value);
@@ -106,6 +126,17 @@ try {
   const detailTagHref = await page.locator("#detail-tag-links .detail-tag-link", { hasText: tagName }).getAttribute("href");
   assert.ok(detailTagHref && /\/taxonomy\?tagId=\d+$/.test(detailTagHref), "detail tag should link to taxonomy tag result");
 
+  const detailOpenLinkDataId = await page.locator("#open-original-link").getAttribute("data-open-link-id");
+  const detailOpenLinkDataUrl = await page.locator("#open-original-link").getAttribute("data-open-url");
+  assert.ok(detailOpenLinkDataId && /^\d+$/.test(detailOpenLinkDataId), "detail open-original-link should carry data-open-link-id");
+  assert.equal(detailOpenLinkDataUrl, "https://example.com/", "detail open-original-link should carry target url");
+
+  const detailVisitCountBeforeOpen = await readDetailVisitCount();
+  await clickLinkAndClosePopup(page.locator("#open-original-link"));
+  await page.reload({ waitUntil: "networkidle" });
+  const detailVisitCountAfterOpen = await readDetailVisitCount();
+  assert.equal(detailVisitCountAfterOpen, detailVisitCountBeforeOpen + 1, "detail open-original-link should increment visit count");
+
   await page.selectOption("#detail-status", "archived");
   await page.click('#detail-form button[type="submit"]');
   await page.waitForFunction(() => {
@@ -125,7 +156,8 @@ try {
 
   await page.reload({ waitUntil: "networkidle" });
   const visitCountText = await page.locator("#detail-meta .stat", { hasText: "访问" }).textContent();
-  assert.ok(visitCountText && /[1-9]/.test(visitCountText), "visit count should be updated");
+  const shortLinkVisitCount = extractVisitCount(visitCountText);
+  assert.ok(Number.isInteger(shortLinkVisitCount) && shortLinkVisitCount >= 2, "short link visit should increment visit count");
   const existingShortLinkText = await page.locator("#existing-short-link").textContent();
   assert.ok(existingShortLinkText && existingShortLinkText.includes("/s/"), "existing short link should display");
 
@@ -164,6 +196,32 @@ try {
   assert.ok(detailHref && /\/link\?id=\d+$/.test(detailHref), "title should open detail page");
   assert.equal(openButtonHref, sourceHref, "open button should point to external url");
   assert.equal(detailButtonHref, detailHref, "detail button should point to detail page");
+
+  await page.locator("#link-grid .card-title-link").first().click();
+  await page.waitForURL(/\/link\?id=\d+$/, { timeout: 15000 });
+  const detailVisitCountBeforeSourceOpen = await readDetailVisitCount();
+  await page.goto(`${baseUrl}/`, { waitUntil: "networkidle" });
+  await page.fill("#search-input", noteValue);
+  await page.waitForTimeout(500);
+  await clickLinkAndClosePopup(page.locator("#link-grid .card-source-link").first());
+  await page.locator("#link-grid .card-title-link").first().click();
+  await page.waitForURL(/\/link\?id=\d+$/, { timeout: 15000 });
+  const detailVisitCountAfterSourceOpen = await readDetailVisitCount();
+  assert.equal(detailVisitCountAfterSourceOpen, detailVisitCountBeforeSourceOpen + 1, "card source link should increment visit count");
+
+  const detailVisitCountBeforeCardOpen = detailVisitCountAfterSourceOpen;
+  await page.goto(`${baseUrl}/`, { waitUntil: "networkidle" });
+  await page.fill("#search-input", noteValue);
+  await page.waitForTimeout(500);
+  await clickLinkAndClosePopup(page.locator("#link-grid .card-open-button").first());
+  await page.locator("#link-grid .card-title-link").first().click();
+  await page.waitForURL(/\/link\?id=\d+$/, { timeout: 15000 });
+  const detailVisitCountAfterCardOpen = await readDetailVisitCount();
+  assert.equal(detailVisitCountAfterCardOpen, detailVisitCountBeforeCardOpen + 1, "card open button should increment visit count");
+
+  await page.goto(`${baseUrl}/`, { waitUntil: "networkidle" });
+  await page.fill("#search-input", noteValue);
+  await page.waitForTimeout(500);
   await page.waitForSelector("#link-grid .card-delete-button", { timeout: 15000 });
   const activeCountBeforeCancel = await page.locator("#link-grid .link-card").count();
   await withNextDialog(false, async () => page.locator("#link-grid .card-delete-button").first().click());
@@ -194,6 +252,17 @@ try {
   assert.ok(taxonomyHint && taxonomyHint.includes("共"), "taxonomy should show count hint");
   assert.ok(taxonomyText && taxonomyText.includes("Example Domain"), "taxonomy should render matching cards in-page");
 
+  await page.locator("#taxonomy-link-grid .card-title-link").first().click();
+  await page.waitForURL(/\/link\?id=\d+$/, { timeout: 15000 });
+  const taxonomyDetailUrl = page.url();
+  const detailVisitCountBeforeTaxonomyOpen = await readDetailVisitCount();
+  await page.goto(new URL(detailTagHref, baseUrl).toString(), { waitUntil: "networkidle" });
+  await clickLinkAndClosePopup(page.locator("#taxonomy-link-grid .card-open-button").first());
+  await page.goto(taxonomyDetailUrl, { waitUntil: "networkidle" });
+  const detailVisitCountAfterTaxonomyOpen = await readDetailVisitCount();
+  assert.equal(detailVisitCountAfterTaxonomyOpen, detailVisitCountBeforeTaxonomyOpen + 1, "taxonomy card open button should increment visit count");
+
+  await page.goto(new URL(detailTagHref, baseUrl).toString(), { waitUntil: "networkidle" });
   await page.locator('#tag-list [data-taxonomy-tag-id]').filter({ hasText: tagName }).click();
   await page.waitForFunction(() => document.querySelector("#taxonomy-link-grid")?.classList.contains("hidden"));
 

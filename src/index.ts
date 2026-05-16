@@ -130,6 +130,18 @@ async function handleApi(request: Request, env: Env, pathname: string, url: URL)
     return json({ shortCode, shortUrl: `${url.origin}/s/${shortCode}` });
   }
 
+  const visitMatch = pathname.match(/^\/api\/links\/(\d+)\/visit$/);
+  if (visitMatch?.[1] && request.method === "POST") {
+    const linkId = Number(visitMatch[1]);
+    const link = await getLinkById(env, linkId);
+    if (!link) {
+      return errorResponse(404, "链接不存在。");
+    }
+
+    await recordVisit(env, linkId);
+    return json({ ok: true, url: link.url });
+  }
+
   if (pathname === "/api/tags" && request.method === "GET") {
     return json({ items: await listTags(env) });
   }
