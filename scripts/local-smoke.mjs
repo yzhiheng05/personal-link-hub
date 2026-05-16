@@ -40,6 +40,12 @@ async function readDetailVisitCount() {
   return count;
 }
 
+async function readCurrentDetailId() {
+  const id = Number(new URL(page.url()).searchParams.get("id"));
+  assert.ok(Number.isInteger(id) && id > 0, `detail url should include numeric id, got: ${page.url()}`);
+  return id;
+}
+
 async function clickLinkAndClosePopup(locator) {
   const popupPromise = page.waitForEvent("popup");
   await locator.click();
@@ -222,16 +228,20 @@ try {
   await page.goto(`${baseUrl}/`, { waitUntil: "networkidle" });
   await page.fill("#search-input", noteValue);
   await page.waitForTimeout(500);
-  await page.waitForSelector("#link-grid .card-delete-button", { timeout: 15000 });
+  await page.waitForSelector("#link-grid .card-archive-button", { timeout: 15000 });
+  assert.equal(await page.locator("#link-grid .card-archive-button").count() > 0, true, "active cards should show archive buttons");
+  assert.equal(await page.locator("#link-grid .card-delete-button").count(), 0, "active cards should not show delete buttons");
   const activeCountBeforeCancel = await page.locator("#link-grid .link-card").count();
-  await withNextDialog(false, async () => page.locator("#link-grid .card-delete-button").first().click());
+  await withNextDialog(false, async () => page.locator("#link-grid .card-archive-button").first().click());
   await page.waitForTimeout(500);
-  assert.equal(await page.locator("#link-grid .link-card").count(), activeCountBeforeCancel, "cancelled soft delete should keep active card visible");
+  assert.equal(await page.locator("#link-grid .link-card").count(), activeCountBeforeCancel, "cancelled archive should keep active card visible");
 
   await page.selectOption("#status-filter", "archived");
   await page.waitForTimeout(500);
   const archivedText = await page.locator("#link-grid").textContent();
   assert.ok(archivedText && archivedText.includes("archived"), "status filter should work");
+  assert.equal(await page.locator("#link-grid .card-restore-button").count() > 0, true, "archived cards should show restore buttons");
+  assert.equal(await page.locator("#link-grid .card-permanent-delete-button").count() > 0, true, "archived cards should show permanent delete buttons");
 
   await page.goto(new URL(detailTagHref, baseUrl).toString(), { waitUntil: "networkidle" });
   await page.waitForSelector("#taxonomy-link-grid .link-card", { timeout: 15000 });
@@ -267,23 +277,56 @@ try {
   await page.waitForFunction(() => document.querySelector("#taxonomy-link-grid")?.classList.contains("hidden"));
 
   await page.goto(new URL(detailTagHref, baseUrl).toString(), { waitUntil: "networkidle" });
-  await page.waitForSelector("#taxonomy-link-grid .card-delete-button", { timeout: 15000 });
-  await withNextDialog(true, async () => page.locator("#taxonomy-link-grid .card-delete-button").first().click());
+  await page.waitForSelector("#taxonomy-link-grid .card-archive-button", { timeout: 15000 });
+  assert.equal(await page.locator("#taxonomy-link-grid .card-delete-button").count(), 0, "taxonomy active cards should not show delete buttons");
+  await withNextDialog(true, async () => page.locator("#taxonomy-link-grid .card-archive-button").first().click());
   await page.waitForTimeout(500);
   const taxonomyAfterSoftDelete = await page.locator("#taxonomy-link-grid").textContent();
-  assert.ok(!taxonomyAfterSoftDelete || !taxonomyAfterSoftDelete.includes("Example Domain"), "confirmed soft delete should remove card from active taxonomy result");
+  assert.ok(!taxonomyAfterSoftDelete || !taxonomyAfterSoftDelete.includes("Example Domain"), "confirmed archive should remove card from active taxonomy result");
 
   await page.goto(`${baseUrl}/`, { waitUntil: "networkidle" });
   await page.selectOption("#status-filter", "archived");
   await page.fill("#search-input", noteValue);
   await page.waitForTimeout(500);
   const archivedAfterSoftDelete = await page.locator("#link-grid").textContent();
-  assert.ok(archivedAfterSoftDelete && archivedAfterSoftDelete.includes("Example Domain"), "soft-deleted link should remain visible in archived filter");
-  assert.equal(await page.locator("#link-grid .card-delete-button").count(), 0, "archived cards should not show delete buttons");
+  assert.ok(archivedAfterSoftDelete && archivedAfterSoftDelete.includes("Example Domain"), "archived link should remain visible in archived filter");
+  await page.waitForSelector("#link-grid .card-restore-button", { timeout: 15000 });
+  const restoredLinkId = await page.locator("#link-grid .card-restore-button").first().getAttribute("data-restore-link-id");
+  assert.ok(restoredLinkId && /^\d+$/.test(restoredLinkId), "restore button should carry link id");
+  await page.locator("#link-grid .card-restore-button").first().click();
+  await page.waitForTimeout(500);
+  assert.equal(await page.locator(`#link-grid [data-restore-link-id="${restoredLinkId}"]`).count(), 0, "restored link should leave archived filter");
+
+  await page.selectOption("#status-filter", "active");
+  await page.waitForTimeout(500);
+  assert.equal(await page.locator(`#link-grid [data-archive-link-id="${restoredLinkId}"]`).count(), 1, "restored link should return to active filter");
+  await withNextDialog(true, async () => page.locator("#link-grid .card-archive-button").first().click());
+  await page.waitForTimeout(500);
+
+  await page.selectOption("#status-filter", "archived");
+  await page.waitForTimeout(500);
+  await page.locator("#link-grid .card-title-link").first().click();
+  await page.waitForURL(/\/link\?id=\d+$/, { timeout: 15000 });
+  const permanentlyDeletedLinkId = await readCurrentDetailId();
+  await page.goto(`${baseUrl}/`, { waitUntil: "networkidle" });
+  await page.selectOption("#status-filter", "archived");
+  await page.fill("#search-input", noteValue);
+  await page.waitForTimeout(500);
+  const permanentlyDeletedButtonId = await page.locator("#link-grid .card-permanent-delete-button").first().getAttribute("data-permanent-delete-link-id");
+  assert.equal(permanentlyDeletedButtonId, String(permanentlyDeletedLinkId), "permanent delete button should target the selected archived link");
+  await withNextDialog(true, async () => page.locator("#link-grid .card-permanent-delete-button").first().click());
+  await page.waitForTimeout(500);
+  assert.equal(await page.locator(`#link-grid [data-permanent-delete-link-id="${permanentlyDeletedLinkId}"]`).count(), 0, "permanently deleted link should leave archived filter");
+  const deletedLinkResponse = await page.evaluate(async (id) => {
+    const response = await fetch(`/api/links/${id}`);
+    return { status: response.status };
+  }, permanentlyDeletedLinkId);
+  assert.equal(deletedLinkResponse.status, 404, "permanently deleted link detail API should return 404");
 
   await page.goto(detailUrl, { waitUntil: "networkidle" });
   await page.waitForSelector("#archive-link-button", { timeout: 15000 });
   assert.equal(await page.locator("#archive-link-button").isDisabled(), true, "archived detail delete button should be disabled");
+  assert.equal(await page.locator("#archive-link-button").textContent(), "已归档", "archived detail archive button should remain disabled");
 
   console.log(JSON.stringify({
     ok: true,

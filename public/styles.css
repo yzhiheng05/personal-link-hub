@@ -1394,6 +1394,8 @@ body[data-page="taxonomy"] .panel {
   color: var(--muted);
 }
 
+.preview-card-shell .card-archive-button,
+.preview-card-shell .card-restore-button,
 .preview-card-shell .card-delete-button {
   display: none;
 }

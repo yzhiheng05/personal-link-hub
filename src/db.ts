@@ -159,6 +159,15 @@ export async function updateLink(env: Env, id: number, input: LinkInput): Promis
   return getLinkById(env, id);
 }
 
+export async function deleteLink(env: Env, id: number): Promise<boolean> {
+  const existing = await env.DB.prepare("SELECT id FROM links WHERE id = ?").bind(id).first<{ id: number | string }>();
+  if (!existing) return false;
+
+  await env.DB.prepare("DELETE FROM link_tags WHERE link_id = ?").bind(id).run();
+  await env.DB.prepare("DELETE FROM links WHERE id = ?").bind(id).run();
+  return true;
+}
+
 export async function ensureShortCode(env: Env, id: number): Promise<string> {
   const existing = await env.DB.prepare("SELECT short_code FROM links WHERE id = ?").bind(id).first<{ short_code: string | null }>();
   if (!existing) throw new HttpError(404, "链接不存在。");

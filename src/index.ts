@@ -2,6 +2,7 @@ import { buildSessionCookie, clearSessionCookie, createSessionToken, deriveSessi
 import {
   createLink,
   createTag,
+  deleteLink,
   ensureShortCode,
   getLinkById,
   getLinkByShortCode,
@@ -122,6 +123,11 @@ async function handleApi(request: Request, env: Env, pathname: string, url: URL)
     assertPublicHttpUrl(payload.url);
     const updated = await updateLink(env, Number(linkMatch[1]), payload);
     return updated ? json({ item: updated }) : errorResponse(404, "链接不存在。");
+  }
+
+  if (linkMatch?.[1] && request.method === "DELETE") {
+    const deleted = await deleteLink(env, Number(linkMatch[1]));
+    return deleted ? new Response(null, { status: 204 }) : errorResponse(404, "链接不存在。");
   }
 
   const shortLinkMatch = pathname.match(/^\/api\/links\/(\d+)\/short-link$/);

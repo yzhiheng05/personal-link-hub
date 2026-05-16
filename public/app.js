@@ -59,6 +59,8 @@ async function initIndexPage() {
 
   find("#link-grid").addEventListener("click", (event) => handleTrackedOpenClick(event, "#list-message"));
   find("#link-grid").addEventListener("click", (event) => handleCardArchiveClick(event, loadLinks));
+  find("#link-grid").addEventListener("click", (event) => handleCardRestoreClick(event, loadLinks));
+  find("#link-grid").addEventListener("click", (event) => handleCardPermanentDeleteClick(event, loadLinks));
 
   await loadLinks();
 }
@@ -171,6 +173,8 @@ async function initTaxonomyPage() {
 
   find("#taxonomy-link-grid").addEventListener("click", (event) => handleTrackedOpenClick(event, "#taxonomy-message"));
   find("#taxonomy-link-grid").addEventListener("click", (event) => handleCardArchiveClick(event, () => reloadActiveTaxonomyTag()));
+  find("#taxonomy-link-grid").addEventListener("click", (event) => handleCardRestoreClick(event, () => reloadActiveTaxonomyTag()));
+  find("#taxonomy-link-grid").addEventListener("click", (event) => handleCardPermanentDeleteClick(event, () => reloadActiveTaxonomyTag()));
 
   find("#tag-list").addEventListener("click", async (event) => {
     const button = event.target.closest("[data-taxonomy-tag-id]");
@@ -262,7 +266,7 @@ function renderDetailArchiveButton(item) {
   if (!button) return;
   const isArchived = item.status === "archived";
   button.disabled = isArchived;
-  button.textContent = isArchived ? "已归档" : "删除链接";
+  button.textContent = isArchived ? "已归档" : "归档链接";
 }
 function renderDetailTagLinks(tags) {
   const container = find("#detail-tag-links");
@@ -420,7 +424,7 @@ function renderLinkGrid(container, items, options = {}) {
           <div class="card-action-row">
             <a class="card-action-button card-open-button" href="${escapeAttribute(item.url)}" target="_blank" rel="noreferrer" data-open-link-id="${item.id}" data-open-url="${escapeAttribute(item.url)}">打开</a>
             <a class="card-action-button card-detail-button" href="/link?id=${item.id}">详情</a>
-            ${item.status === "archived" ? "" : `<button class="card-action-button card-delete-button" type="button" data-archive-link-id="${item.id}">删除</button>`}
+            ${renderCardStatusActions(item)}
           </div>
           <div class="card-meta-row">
             <span>${escapeHtml(formatShortDate(item.updated_at))}</span>
@@ -432,16 +436,51 @@ function renderLinkGrid(container, items, options = {}) {
   }).join("");
 }
 
+function renderCardStatusActions(item) {
+  if (item.status === "archived") {
+    return `
+      <button class="card-action-button card-restore-button" type="button" data-restore-link-id="${item.id}">恢复</button>
+      <button class="card-action-button card-delete-button card-permanent-delete-button" type="button" data-permanent-delete-link-id="${item.id}">永久删除</button>
+    `;
+  }
+
+  return `<button class="card-action-button card-archive-button" type="button" data-archive-link-id="${item.id}">归档</button>`;
+}
+
 async function handleCardArchiveClick(event, reloadCallback) {
-  const button = event.target.closest("[data-archive-link-id]");
+  const source = event.target instanceof Element ? event.target : event.target?.parentElement;
+  const button = source?.closest("[data-archive-link-id]");
   if (!button) return;
   const linkId = Number(button.dataset.archiveLinkId);
   if (!Number.isInteger(linkId)) return;
   const card = button.closest(".collection-card");
   const item = readLinkItemFromCard(card);
   if (!item) return;
-  const archived = await archiveLinkWithConfirmation(item, "删除后会移到归档，仍可在归档里找回。确定删除这张卡片吗？");
+  const archived = await archiveLinkWithConfirmation(item, "归档后会移出活跃列表，仍可在归档里找回。确定归档这张卡片吗？");
   if (archived && reloadCallback) await reloadCallback();
+}
+
+async function handleCardRestoreClick(event, reloadCallback) {
+  const source = event.target instanceof Element ? event.target : event.target?.parentElement;
+  const button = source?.closest("[data-restore-link-id]");
+  if (!button) return;
+  const linkId = Number(button.dataset.restoreLinkId);
+  if (!Number.isInteger(linkId)) return;
+  const item = readLinkItemFromCard(button.closest(".collection-card"));
+  if (!item) return;
+  const restored = await restoreLink(item);
+  if (restored && reloadCallback) await reloadCallback();
+}
+
+async function handleCardPermanentDeleteClick(event, reloadCallback) {
+  const source = event.target instanceof Element ? event.target : event.target?.parentElement;
+  const button = source?.closest("[data-permanent-delete-link-id]");
+  if (!button) return;
+  const linkId = Number(button.dataset.permanentDeleteLinkId);
+  if (!Number.isInteger(linkId)) return;
+  if (!confirm("永久删除后无法恢复，确定删除这条链接吗？")) return;
+  await apiFetch(`/api/links/${linkId}`, { method: "DELETE" });
+  if (reloadCallback) await reloadCallback();
 }
 
 async function handleTrackedOpenClick(event, messageSelector) {
@@ -488,7 +527,7 @@ async function handleTrackedOpenClick(event, messageSelector) {
 
 async function archiveCurrentDetailLink() {
   if (!state.currentLink) return false;
-  return archiveLinkWithConfirmation(state.currentLink, "删除后会移到归档，仍可在归档里找回。确定删除当前链接吗？");
+  return archiveLinkWithConfirmation(state.currentLink, "归档后会移出活跃列表，仍可在归档里找回。确定归档当前链接吗？");
 }
 
 async function archiveLinkWithConfirmation(item, message) {
@@ -498,7 +537,17 @@ async function archiveLinkWithConfirmation(item, message) {
   return true;
 }
 
+async function restoreLink(item) {
+  if (item.status !== "archived") return false;
+  await apiFetch(`/api/links/${item.id}`, { method: "PATCH", body: toStatusPayload(item, "active") });
+  return true;
+}
+
 function toArchivePayload(item) {
+  return toStatusPayload(item, "archived");
+}
+
+function toStatusPayload(item, status) {
   return {
     url: item.url,
     title: item.title,
@@ -507,7 +556,7 @@ function toArchivePayload(item) {
     coverImageUrl: item.cover_image_url,
     summary: item.summary,
     note: item.note,
-    status: "archived",
+    status,
     tagNames: Array.isArray(item.tags) ? item.tags.map((tag) => tag.name) : [],
   };
 }
