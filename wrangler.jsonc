@@ -11,7 +11,6 @@
     {
       "binding": "DB",
       "database_name": "link_hub",
-      "database_id": "00000000-0000-0000-0000-000000000000",
       "migrations_dir": "./migrations"
     }
   ]

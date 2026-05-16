@@ -20,9 +20,8 @@ A Cloudflare Worker full-stack first-version app for a single-user personal link
 2. Copy `.dev.vars.example` to `.dev.vars`
 3. Set `ADMIN_PASSWORD` in `.dev.vars`
 4. Create a D1 database: `npx wrangler d1 create link_hub`
-5. Replace `database_id` in `wrangler.jsonc` with the real D1 id
-6. Apply migrations locally: `npm run db:migrate:local`
-7. Start dev server: `npm run dev`
+5. Apply migrations locally: `npm run db:migrate:local`
+6. Start dev server: `npm run dev`
 
 ## Local routes
 
@@ -46,8 +45,8 @@ In the current local setup:
 This project is currently prepared for a single `workers.dev` deployment target.
 
 1. Authenticate Wrangler with either `npx wrangler login` or a `CLOUDFLARE_API_TOKEN` that can manage Workers and D1.
-2. Create the production D1 database: `npx wrangler d1 create link_hub`
-3. Copy the returned `database_id` into `wrangler.jsonc`
+2. Create or select the production D1 database named `link_hub`.
+3. Bind the D1 database to the Worker with binding name `DB`. In the Cloudflare dashboard, add a D1 database binding, set variable name to `DB`, and select `link_hub`.
 4. Apply remote migrations: `npm run db:migrate:remote`
 5. Set production secrets:
    - `npx wrangler secret put ADMIN_PASSWORD`
@@ -70,5 +69,5 @@ The same script can be used for both local verification and `workers.dev` regres
 - This first version keeps only `visit_count` and `last_visited_at` in `links`
 - New links are created from manual input; extra metadata can be filled in later on the detail page
 - URL validation blocks obvious localhost and private-network targets, but it does not do DNS-layer private IP resolution
-- `wrangler.jsonc` still contains a placeholder `database_id` and must be updated before real deployment
+- `wrangler.jsonc` declares the D1 binding by name and intentionally does not store a `database_id`; bind `DB` to `link_hub` in the Cloudflare dashboard for dashboard-managed deployments
 - Production password must be provided explicitly through Wrangler secrets; do not rely on `.dev.vars` for deployment
