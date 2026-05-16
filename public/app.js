@@ -7,6 +7,8 @@ const state = {
   taxonomyLinks: [],
   currentLink: null,
   showAllTags: false,
+  statusFilter: "active",
+  toastTimer: null,
 };
 
 boot().catch((error) => {
@@ -36,25 +38,32 @@ async function initLoginPage() {
   const form = find("#login-form");
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
-    clearFlash(find("#login-message"));
+    const messageEl = find("#login-message");
+    clearFlash(messageEl);
+    const password = String(new FormData(form).get("password") || "");
+    if (!password.trim()) {
+      flash(messageEl, "请输入密码。", true);
+      return;
+    }
     try {
-      const payload = { password: new FormData(form).get("password") };
-      const response = await apiFetch("/api/auth/login", { method: "POST", body: payload });
+      const payload = { password };
+      const response = await apiFetch("/api/auth/login", { method: "POST", body: payload, allowUnauthorized: true });
       if (response.ok) {
         location.href = new URLSearchParams(location.search).get("redirect") || "/";
       }
     } catch (error) {
-      flash(find("#login-message"), error.message, true);
+      flash(messageEl, error.message, true);
     }
   });
 }
 
 async function initIndexPage() {
   await loadTags();
+  renderStatusFilter();
   renderFilterTagOptions(find("#tag-filter"), state.tags, state.selectedTags);
 
   find("#search-input").addEventListener("input", debounce(loadLinks, 250));
-  find("#status-filter").addEventListener("change", loadLinks);
+  find("#status-filter").addEventListener("click", (event) => handleStatusFilterClick(event, loadLinks));
   find("#tag-filter").addEventListener("click", (event) => handleFilterTagToggle(event, loadLinks));
 
   find("#link-grid").addEventListener("click", (event) => handleTrackedOpenClick(event, "#list-message"));
@@ -125,11 +134,12 @@ async function initLinkPage() {
         initialNames: state.draftTagNames,
         onChange: handleDraftTagNamesChange,
       });
-      flash(find("#detail-message"), `已保存：${saveResponse.item.title || saveResponse.item.url}`);
+      showDetailMessage(`已保存：${saveResponse.item.title || saveResponse.item.url}`);
     } catch (error) {
-      flash(find("#detail-message"), error.message, true);
+      showDetailMessage(error.message, true);
     }
   });
+  find(".panel-wide").addEventListener("click", (event) => handleCopyClick(event));
   find("#generate-short-link").addEventListener("click", async () => {
     clearFlash(find("#short-link-output"));
     try {
@@ -137,7 +147,7 @@ async function initLinkPage() {
       renderShortLink(find("#short-link-output"), shortLinkResponse.shortUrl, "已生成短链：");
       renderShortLink(find("#existing-short-link"), shortLinkResponse.shortUrl, "当前短链：");
     } catch (error) {
-      flash(find("#short-link-output"), error.message, true);
+      showDetailMessage(error.message, true);
     }
   });
   find("#archive-link-button").addEventListener("click", async () => {
@@ -202,7 +212,7 @@ async function saveLink() {
 async function loadLinks() {
   const params = new URLSearchParams();
   const q = find("#search-input").value.trim();
-  const status = find("#status-filter").value;
+  const status = state.statusFilter;
   if (q) params.set("q", q);
   if (status) params.set("status", status);
   if (state.selectedTags.size > 0) params.set("tagIds", Array.from(state.selectedTags).join(","));
@@ -250,6 +260,8 @@ function populateLinkDetail(item) {
   openOriginalLink.href = item.url;
   openOriginalLink.dataset.openLinkId = String(item.id);
   openOriginalLink.dataset.openUrl = item.url;
+  const copyOriginalLink = find("#copy-original-link");
+  if (copyOriginalLink) copyOriginalLink.dataset.copyValue = item.url || "";
   renderDetailArchiveButton(item);
   if (item.short_code) {
     const shortUrl = `${location.origin}/s/${item.short_code}`;
@@ -393,6 +405,25 @@ function renderFilterTagOptions(container, tags, selectedIds) {
     ? `<button class="tag-option tag-more-toggle" type="button" data-tag-more="true">${state.showAllTags ? "收起标签" : `更多 ${hiddenCount}`}</button>`
     : "";
   container.innerHTML = tagButtons + moreButton;
+}
+
+function renderStatusFilter() {
+  const container = find("#status-filter");
+  if (!container) return;
+  container.dataset.statusValue = state.statusFilter;
+  container.querySelectorAll("[data-status-filter-value]").forEach((button) => {
+    const active = button.dataset.statusFilterValue === state.statusFilter;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", String(active));
+  });
+}
+
+function handleStatusFilterClick(event, callback) {
+  const button = event.target.closest("[data-status-filter-value]");
+  if (!button) return;
+  state.statusFilter = button.dataset.statusFilterValue || "";
+  renderStatusFilter();
+  if (callback) callback();
 }
 
 function renderLinkGrid(container, items, options = {}) {
@@ -575,7 +606,68 @@ async function reloadActiveTaxonomyTag() {
   await activateTaxonomyTag(state.activeTaxonomyTagId);
 }
 function renderShortLink(element, shortUrl, prefix) {
-  element.innerHTML = `${escapeHtml(prefix)}<a class="text-link" href="${shortUrl}" target="_blank" rel="noreferrer">${escapeHtml(shortUrl)}</a>`;
+  element.innerHTML = renderCopyableLink(shortUrl, prefix);
+}
+
+function renderCopyableLink(url, prefix) {
+  const safeUrl = escapeAttribute(url);
+  return `
+    <span class="copyable-link-label">${escapeHtml(prefix)}</span>
+    <span class="copyable-link-row">
+      <a class="text-link" href="${safeUrl}" target="_blank" rel="noreferrer">${escapeHtml(url)}</a>
+      <button class="copy-button copy-inline-button" type="button" data-copy-value="${safeUrl}">复制</button>
+    </span>
+  `;
+}
+
+async function handleCopyClick(event) {
+  const source = event.target instanceof Element ? event.target : event.target?.parentElement;
+  const button = source?.closest("[data-copy-value]");
+  if (!button) return;
+  const value = String(button.dataset.copyValue || "");
+  if (!value) return;
+  try {
+    await copyText(value);
+    showDetailMessage("已复制到剪贴板。");
+  } catch {
+    showDetailMessage("复制失败，请手动复制。", true);
+  }
+}
+
+async function copyText(value) {
+  if (!navigator.clipboard?.writeText) throw new Error("Clipboard API unavailable");
+  await navigator.clipboard.writeText(value);
+}
+
+function showDetailMessage(message, isWarning = false) {
+  const element = find("#detail-message");
+  clearFlash(element);
+  showToast(message, isWarning);
+}
+
+function showToast(message, isWarning = false) {
+  if (!message) return;
+  const region = getToastRegion();
+  window.clearTimeout(state.toastTimer);
+  region.classList.remove("hidden", "toast-success", "toast-warning");
+  region.classList.add(isWarning ? "toast-warning" : "toast-success");
+  region.textContent = message;
+  region.setAttribute("role", isWarning ? "alert" : "status");
+  region.setAttribute("aria-live", isWarning ? "assertive" : "polite");
+
+  state.toastTimer = window.setTimeout(() => {
+    region.classList.add("hidden");
+  }, isWarning ? 4000 : 2500);
+}
+
+function getToastRegion() {
+  let region = find(".toast-region");
+  if (region) return region;
+  region = document.createElement("div");
+  region.className = "toast-region hidden";
+  region.setAttribute("aria-live", "polite");
+  document.body.append(region);
+  return region;
 }
 
 function renderVisual(element, item, size) {
@@ -638,28 +730,70 @@ function serializeLinkForm(form) {
 
 function bindTagEditor({ root, initialNames, onChange }) {
   const normalized = normalizeTagNames(initialNames);
+  const suggestionPanelId = `${root.id || "tag-editor"}-suggestions`;
+  let activeSuggestionIndex = 0;
   root.dataset.tagNames = JSON.stringify(normalized);
   root.innerHTML = `
     <div class="tag-editor-shell">
       <div class="tag-chip-list"></div>
-      <input class="field tag-editor-input" type="text" placeholder="输入标签后按回车、逗号或顿号" list="tag-suggestions" />
+      <div class="tag-input-wrap">
+        <input class="field tag-editor-input" type="text" placeholder="输入标签后按回车、逗号或顿号" autocomplete="off" aria-label="标签" aria-autocomplete="list" aria-controls="${escapeAttribute(suggestionPanelId)}" aria-expanded="false" />
+        <div id="${escapeAttribute(suggestionPanelId)}" class="tag-suggestion-panel hidden" role="listbox"></div>
+      </div>
     </div>
     <p class="muted tag-editor-hint">可直接输入新标签，支持逗号、中文逗号、回车和失焦确认。</p>
-    <datalist id="tag-suggestions">${state.tags.map((tag) => `<option value="${escapeAttribute(tag.name)}"></option>`).join("")}</datalist>
   `;
 
   const input = root.querySelector(".tag-editor-input");
   const chipList = root.querySelector(".tag-chip-list");
+  const suggestionPanel = root.querySelector(".tag-suggestion-panel");
+
+  const refreshSuggestions = () => {
+    activeSuggestionIndex = 0;
+    renderTagSuggestions(root, input, suggestionPanel, activeSuggestionIndex);
+  };
+
+  const applySuggestion = (button) => {
+    if (!button) return false;
+    const nextNames = mergeTagNames(readTagEditorNames(root), [button.dataset.suggestedTag]);
+    input.value = "";
+    writeTagEditorNames(root, chipList, nextNames);
+    hideTagSuggestions(input, suggestionPanel);
+    onChange(nextNames);
+    return true;
+  };
 
   const commitCurrentInput = () => {
     const currentNames = readTagEditorNames(root);
     const nextNames = mergeTagNames(currentNames, splitTagTokens(input.value));
     input.value = "";
     writeTagEditorNames(root, chipList, nextNames);
+    hideTagSuggestions(input, suggestionPanel);
     onChange(nextNames);
   };
 
   input.addEventListener("keydown", (event) => {
+    const suggestionButtons = Array.from(suggestionPanel.querySelectorAll("[data-suggested-tag]"));
+    if (event.key === "Escape" && !suggestionPanel.classList.contains("hidden")) {
+      event.preventDefault();
+      hideTagSuggestions(input, suggestionPanel);
+      return;
+    }
+
+    if ((event.key === "ArrowDown" || event.key === "ArrowUp") && suggestionButtons.length > 0) {
+      event.preventDefault();
+      const delta = event.key === "ArrowDown" ? 1 : -1;
+      activeSuggestionIndex = (activeSuggestionIndex + delta + suggestionButtons.length) % suggestionButtons.length;
+      markActiveTagSuggestion(suggestionPanel, activeSuggestionIndex);
+      return;
+    }
+
+    if (event.key === "Enter" && suggestionButtons.length > 0) {
+      event.preventDefault();
+      applySuggestion(suggestionButtons[activeSuggestionIndex] || suggestionButtons[0]);
+      return;
+    }
+
     if (event.key === "Enter" || event.key === "," || event.key === "，") {
       event.preventDefault();
       commitCurrentInput();
@@ -669,18 +803,34 @@ function bindTagEditor({ root, initialNames, onChange }) {
     if (event.key === "Backspace" && !input.value && readTagEditorNames(root).length > 0) {
       const nextNames = readTagEditorNames(root).slice(0, -1);
       writeTagEditorNames(root, chipList, nextNames);
+      refreshSuggestions();
       onChange(nextNames);
     }
   });
 
   input.addEventListener("input", () => {
-    if (!/[，,]/.test(input.value)) return;
-    commitCurrentInput();
+    if (/[，,]/.test(input.value)) {
+      commitCurrentInput();
+      return;
+    }
+    refreshSuggestions();
   });
 
+  input.addEventListener("focus", refreshSuggestions);
+
   input.addEventListener("blur", () => {
-    if (!input.value.trim()) return;
-    commitCurrentInput();
+    window.setTimeout(() => {
+      if (input.value.trim()) commitCurrentInput();
+      hideTagSuggestions(input, suggestionPanel);
+    }, 80);
+  });
+
+  suggestionPanel.addEventListener("pointerdown", (event) => {
+    const button = event.target.closest("[data-suggested-tag]");
+    if (!button) return;
+    event.preventDefault();
+    applySuggestion(button);
+    input.focus();
   });
 
   chipList.addEventListener("click", (event) => {
@@ -689,15 +839,19 @@ function bindTagEditor({ root, initialNames, onChange }) {
     const tagName = button.dataset.tagName;
     const nextNames = readTagEditorNames(root).filter((name) => name !== tagName);
     writeTagEditorNames(root, chipList, nextNames);
+    hideTagSuggestions(input, suggestionPanel);
     onChange(nextNames);
   });
 
   writeTagEditorNames(root, chipList, normalized);
+  hideTagSuggestions(input, suggestionPanel);
   onChange(normalized);
 }
 
 function finalizeTagEditor(root) {
   const input = root.querySelector(".tag-editor-input");
+  const suggestionPanel = root.querySelector(".tag-suggestion-panel");
+  hideTagSuggestions(input, suggestionPanel);
   if (!input || !input.value.trim()) return;
   const chipList = root.querySelector(".tag-chip-list");
   const nextNames = mergeTagNames(readTagEditorNames(root), splitTagTokens(input.value));
@@ -725,6 +879,42 @@ function writeTagEditorNames(root, chipList, tagNames) {
       </span>
     `).join("")
     : '<span class="muted message-pill">还没有标签，输入后会自动创建。</span>';
+}
+
+function renderTagSuggestions(root, input, panel, activeIndex = 0) {
+  const selected = new Set(readTagEditorNames(root));
+  const query = input.value.trim().toLowerCase();
+  const suggestions = state.tags
+    .map((tag) => tag.name)
+    .filter((name) => !isSmokeTagName(name) && !selected.has(name))
+    .filter((name) => !query || name.toLowerCase().includes(query))
+    .slice(0, 6);
+
+  if (suggestions.length === 0) {
+    hideTagSuggestions(input, panel);
+    return;
+  }
+
+  panel.innerHTML = suggestions.map((name, index) => `
+    <button class="tag-suggestion-option${index === activeIndex ? " active" : ""}" type="button" role="option" aria-selected="${index === activeIndex}" data-suggested-tag="${escapeAttribute(name)}">${escapeHtml(name)}</button>
+  `).join("");
+  panel.classList.remove("hidden");
+  input.setAttribute("aria-expanded", "true");
+}
+
+function markActiveTagSuggestion(panel, activeIndex) {
+  panel.querySelectorAll("[data-suggested-tag]").forEach((button, index) => {
+    const active = index === activeIndex;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-selected", String(active));
+  });
+}
+
+function hideTagSuggestions(input, panel) {
+  if (!panel) return;
+  panel.classList.add("hidden");
+  panel.innerHTML = "";
+  input?.setAttribute("aria-expanded", "false");
 }
 
 function handleDraftTagNamesChange(tagNames) {
@@ -835,6 +1025,7 @@ function clearFlash(element) {
   if (!element) return;
   element.textContent = "";
   element.style.color = "";
+  element.classList.remove("message-success", "message-warning");
 }
 
 function formatShortDate(value) {

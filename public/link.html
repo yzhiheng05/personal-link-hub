@@ -31,6 +31,7 @@
             <div id="detail-tag-links" class="detail-tag-links"></div>
             <div class="detail-quick-actions">
               <a id="open-original-link" class="text-link action-link-block" href="#" target="_blank" rel="noreferrer">打开原始链接</a>
+              <button id="copy-original-link" class="copy-button" type="button" data-copy-value="">复制原始链接</button>
             </div>
             <div id="detail-meta" class="stats-row"></div>
           </div>
@@ -56,15 +57,15 @@
               <div id="detail-tag-editor" class="tag-editor"></div>
             </div>
             <button class="primary-button" type="submit">保存修改</button>
-            <p id="detail-message" class="muted message-slot message-pill"></p>
+            <p id="detail-message" class="muted message-slot message-pill" aria-live="polite"></p>
           </form>
           <aside class="surface-card notes-card content-note-card">
             <h3 class="section-title-pill">分享与跳转</h3>
             <div class="soft-panel action-stack">
-              <p id="existing-short-link" class="muted message-slot message-pill"></p>
+              <p id="existing-short-link" class="muted message-slot message-pill" aria-live="polite"></p>
               <button id="generate-short-link" class="primary-button" type="button">生成短链</button>
               <button id="archive-link-button" class="danger-button" type="button">删除链接</button>
-              <p id="short-link-output" class="muted message-slot message-pill"></p>
+              <p id="short-link-output" class="muted message-slot message-pill" aria-live="polite"></p>
             </div>
           </aside>
         </section>

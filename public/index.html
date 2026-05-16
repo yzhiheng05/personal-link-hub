@@ -29,11 +29,11 @@
           </div>
           <div class="collection-actions">
             <input id="search-input" class="field search-field" type="search" placeholder="搜索标题、URL、备注" />
-            <select id="status-filter" class="field status-field">
-              <option value="active">活跃</option>
-              <option value="archived">归档</option>
-              <option value="">全部</option>
-            </select>
+            <div id="status-filter" class="status-segmented" role="group" aria-label="收藏状态筛选" data-status-value="active">
+              <button class="status-segment active" type="button" data-status-filter-value="active" aria-pressed="true">活跃</button>
+              <button class="status-segment" type="button" data-status-filter-value="archived" aria-pressed="false">归档</button>
+              <button class="status-segment" type="button" data-status-filter-value="" aria-pressed="false">全部</button>
+            </div>
             <a class="primary-button compact-button" href="/new">新增</a>
           </div>
           <div id="tag-filter" class="tag-cluster tag-filter-strip"></div>
@@ -43,7 +43,7 @@
             <h3>全部收藏</h3>
             <p id="list-hint" class="muted">加载中...</p>
           </div>
-          <p id="list-message" class="muted message-slot message-pill"></p>
+          <p id="list-message" class="muted message-slot message-pill" aria-live="polite"></p>
           <div id="link-grid" class="link-grid collection-grid"></div>
         </section>
       </main>

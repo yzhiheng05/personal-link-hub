@@ -7,7 +7,9 @@ const browser = await chromium.launch({
   headless: true,
   executablePath: "C:/Users/omen/AppData/Local/ms-playwright/chromium-1217/chrome-win64/chrome.exe",
 });
-const page = await browser.newPage();
+const context = await browser.newContext();
+await context.grantPermissions(["clipboard-read", "clipboard-write"], { origin: baseUrl });
+const page = await context.newPage();
 const errors = [];
 page.on("console", (msg) => {
   if (msg.type() === "error") {
@@ -60,6 +62,30 @@ async function addTagToken(rootSelector, value) {
   await input.press("Enter");
 }
 
+async function selectStatusFilter(value) {
+  const selector = `#status-filter [data-status-filter-value="${value}"]`;
+  await page.locator(selector).click();
+  await page.waitForFunction((status) => {
+    const container = document.querySelector("#status-filter");
+    const active = container?.querySelector(".status-segment.active");
+    return container?.dataset.statusValue === status && active?.dataset.statusFilterValue === status;
+  }, value);
+}
+
+async function expectMessage(selector, text) {
+  await page.waitForFunction(({ selector, text }) => {
+    const el = document.querySelector(selector);
+    return el && el.textContent.includes(text);
+  }, { selector, text });
+}
+
+async function expectToast(text) {
+  await page.waitForFunction((text) => {
+    const el = document.querySelector(".toast-region");
+    return el && !el.classList.contains("hidden") && el.textContent.includes(text);
+  }, text);
+}
+
 async function withNextDialog(accept, action) {
   const dialogPromise = page.waitForEvent("dialog");
   const actionPromise = action();
@@ -74,6 +100,11 @@ async function withNextDialog(accept, action) {
 
 try {
   await page.goto(`${baseUrl}/login`, { waitUntil: "networkidle" });
+  await page.click('button[type="submit"]');
+  await expectMessage("#login-message", "请输入密码");
+  await page.fill('input[name="password"]', `${smokePassword}-wrong`);
+  await page.click('button[type="submit"]');
+  await expectMessage("#login-message", "密码错误");
   await page.fill('input[name="password"]', smokePassword);
   await page.click('button[type="submit"]');
   await page.waitForURL(`${baseUrl}/`, { timeout: 15000 });
@@ -105,6 +136,9 @@ try {
   await page.fill("#summary", summaryValue);
   await page.fill("#cover", coverValue);
   await page.fill("#note", noteValue);
+  await page.locator("#tag-editor .tag-editor-input").fill(tagName);
+  await page.waitForSelector(`#tag-editor .tag-suggestion-option:text("${tagName}")`, { timeout: 15000 });
+  await page.locator("#tag-editor .tag-suggestion-option", { hasText: tagName }).click();
   await addTagToken("#tag-editor", tagName);
   await addTagToken("#tag-editor", `${secondTag}，`);
   await page.waitForSelector("#new-preview-card .collection-card", { timeout: 15000 });
@@ -143,6 +177,9 @@ try {
   const detailOpenLinkDataUrl = await page.locator("#open-original-link").getAttribute("data-open-url");
   assert.ok(detailOpenLinkDataId && /^\d+$/.test(detailOpenLinkDataId), "detail open-original-link should carry data-open-link-id");
   assert.equal(detailOpenLinkDataUrl, "https://example.com/", "detail open-original-link should carry target url");
+  assert.equal(await page.locator("#copy-original-link").getAttribute("data-copy-value"), "https://example.com/", "original link copy button should carry target url");
+  await page.locator("#copy-original-link").click();
+  await expectToast("已复制");
 
   const detailVisitCountBeforeOpen = await readDetailVisitCount();
   await clickLinkAndClosePopup(page.locator("#open-original-link"));
@@ -152,15 +189,16 @@ try {
 
   await page.selectOption("#detail-status", "archived");
   await page.click('#detail-form button[type="submit"]');
-  await page.waitForFunction(() => {
-    const el = document.querySelector("#detail-message");
-    return el && el.textContent.includes("已保存");
-  });
+  await expectToast("已保存");
+  assert.equal((await page.locator("#detail-message").textContent()).trim(), "", "detail inline message should stay empty after save toast");
 
   await page.click("#generate-short-link");
   await page.waitForSelector("#short-link-output a", { timeout: 15000 });
   const shortLinkHref = await page.locator("#short-link-output a").getAttribute("href");
   assert.ok(shortLinkHref, "short link should be generated");
+  assert.equal(await page.locator('#short-link-output [data-copy-value]').getAttribute("data-copy-value"), shortLinkHref, "generated short link should be copyable");
+  await page.locator('#short-link-output [data-copy-value]').click();
+  await expectToast("已复制");
 
   const shortPage = await browser.newPage();
   await shortPage.goto(shortLinkHref, { waitUntil: "domcontentloaded" });
@@ -173,6 +211,25 @@ try {
   assert.ok(Number.isInteger(shortLinkVisitCount) && shortLinkVisitCount >= 2, "short link visit should increment visit count");
   const existingShortLinkText = await page.locator("#existing-short-link").textContent();
   assert.ok(existingShortLinkText && existingShortLinkText.includes("/s/"), "existing short link should display");
+  assert.equal(await page.locator('#existing-short-link [data-copy-value]').getAttribute("data-copy-value"), shortLinkHref, "existing short link should be copyable");
+
+  await page.locator("#detail-tag-editor .tag-chip", { hasText: tagName }).locator(".tag-chip-remove").click();
+  await page.locator("#detail-tag-editor .tag-editor-input").fill(tagName);
+  await page.waitForSelector(`#detail-tag-editor .tag-suggestion-option:text("${tagName}")`, { timeout: 15000 });
+  await page.locator("#detail-tag-editor .tag-editor-input").press("Escape");
+  await page.waitForFunction(() => {
+    const panel = document.querySelector("#detail-tag-editor .tag-suggestion-panel");
+    return panel?.classList.contains("hidden") && getComputedStyle(panel).display === "none";
+  });
+  await page.locator("#detail-tag-editor .tag-editor-input").fill(tagName);
+  await page.waitForSelector(`#detail-tag-editor .tag-suggestion-option:text("${tagName}")`, { timeout: 15000 });
+  await page.locator("#detail-tag-editor .tag-editor-input").press("Enter");
+  await page.waitForFunction(() => {
+    const panel = document.querySelector("#detail-tag-editor .tag-suggestion-panel");
+    return panel?.classList.contains("hidden") && getComputedStyle(panel).display === "none";
+  });
+  const detailChipsAfterSuggestionEnter = await page.locator("#detail-tag-editor .tag-chip").allTextContents();
+  assert.ok(detailChipsAfterSuggestionEnter.some((text) => text.includes(tagName)), "tag suggestion Enter should add existing tag");
 
   await page.goto(`${baseUrl}/new`, { waitUntil: "networkidle" });
   await page.fill("#url", "https://example.com/");
@@ -243,7 +300,7 @@ try {
   await page.waitForTimeout(500);
   assert.equal(await page.locator("#link-grid .link-card").count(), activeCountBeforeCancel, "cancelled archive should keep active card visible");
 
-  await page.selectOption("#status-filter", "archived");
+  await selectStatusFilter("archived");
   await page.waitForTimeout(500);
   const archivedText = await page.locator("#link-grid").textContent();
   assert.ok(archivedText && archivedText.includes("archived"), "status filter should work");
@@ -292,7 +349,7 @@ try {
   assert.ok(!taxonomyAfterSoftDelete || !taxonomyAfterSoftDelete.includes("Example Domain"), "confirmed archive should remove card from active taxonomy result");
 
   await page.goto(`${baseUrl}/`, { waitUntil: "networkidle" });
-  await page.selectOption("#status-filter", "archived");
+  await selectStatusFilter("archived");
   await page.fill("#search-input", noteValue);
   await page.waitForTimeout(500);
   const archivedAfterSoftDelete = await page.locator("#link-grid").textContent();
@@ -304,19 +361,19 @@ try {
   await page.waitForTimeout(500);
   assert.equal(await page.locator(`#link-grid [data-restore-link-id="${restoredLinkId}"]`).count(), 0, "restored link should leave archived filter");
 
-  await page.selectOption("#status-filter", "active");
+  await selectStatusFilter("active");
   await page.waitForTimeout(500);
   assert.equal(await page.locator(`#link-grid [data-archive-link-id="${restoredLinkId}"]`).count(), 1, "restored link should return to active filter");
   await withNextDialog(true, async () => page.locator("#link-grid .card-archive-button").first().click());
   await page.waitForTimeout(500);
 
-  await page.selectOption("#status-filter", "archived");
+  await selectStatusFilter("archived");
   await page.waitForTimeout(500);
   await page.locator("#link-grid .card-title-link").first().click();
   await page.waitForURL(/\/link\?id=\d+$/, { timeout: 15000 });
   const permanentlyDeletedLinkId = await readCurrentDetailId();
   await page.goto(`${baseUrl}/`, { waitUntil: "networkidle" });
-  await page.selectOption("#status-filter", "archived");
+  await selectStatusFilter("archived");
   await page.fill("#search-input", noteValue);
   await page.waitForTimeout(500);
   const permanentlyDeletedButtonId = await page.locator("#link-grid .card-permanent-delete-button").first().getAttribute("data-permanent-delete-link-id");
