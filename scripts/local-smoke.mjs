@@ -112,6 +112,13 @@ try {
   assert.ok(previewText && previewText.includes("Example Domain"), "new page preview should show title");
   assert.ok(previewText && previewText.includes(summaryValue), "new page preview should show summary");
   assert.ok(previewText && previewText.includes(tagName), "new page preview should show tag chip");
+  assert.equal(await page.locator("#new-preview-card .card-open-button").count(), 1, "new page preview should show open button");
+  assert.equal(await page.locator("#new-preview-card .card-detail-button").count(), 1, "new page preview should show detail button");
+  await page.waitForSelector("#new-preview-card .card-archive-button", { timeout: 15000 });
+  const previewArchiveText = await page.locator("#new-preview-card .card-archive-button").textContent();
+  assert.equal(previewArchiveText, "归档", "new page preview should show archive button");
+  assert.equal(await page.locator("#new-preview-card .card-restore-button").count(), 0, "new page preview should not show restore button");
+  assert.equal(await page.locator("#new-preview-card .card-permanent-delete-button").count(), 0, "new page preview should not show permanent delete button");
   await page.click('#link-form button[type="submit"]');
   await page.waitForURL(/\/link\?id=\d+$/, { timeout: 15000 });
   await page.waitForLoadState("networkidle");
