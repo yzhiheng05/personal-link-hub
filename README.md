@@ -18,7 +18,7 @@ A Cloudflare Worker full-stack first-version app for a single-user personal link
 
 1. Install dependencies: `npm install`
 2. Copy `.dev.vars.example` to `.dev.vars`
-3. Set `ADMIN_PASSWORD` in `.dev.vars`
+3. Set your own `ADMIN_PASSWORD` in `.dev.vars`
 4. Create a D1 database: `npx wrangler d1 create link_hub`
 5. Apply migrations locally: `npm run db:migrate:local`
 6. Start dev server: `npm run dev`
@@ -33,34 +33,40 @@ When served by Wrangler assets, HTML pages are exposed through extensionless rou
 - `/link?id=<id>`
 - `/taxonomy`
 
-## Local dev credentials
+## Required password configuration
 
-Current local development credentials are controlled by `.dev.vars`.
-In the current local setup:
+`ADMIN_PASSWORD` is required. The Worker validates this binding on every request, and the app will fail with `Missing ADMIN_PASSWORD environment variable.` if it is not configured.
 
-- password: `admin123`
+- Local development reads `ADMIN_PASSWORD` from `.dev.vars`.
+- `.dev.vars.example` is only an example file; copy it to `.dev.vars` and replace the value with your own password.
+- Cloudflare production does not read `.dev.vars`; set `ADMIN_PASSWORD` as a Worker secret before deploying.
 
-## Production deployment
+## Deploy to Cloudflare
 
-This project is currently prepared for a single `workers.dev` deployment target.
+The production Worker requires both a D1 binding named `DB` and a secret named `ADMIN_PASSWORD`. Do not deploy before both are configured.
 
-1. Authenticate Wrangler with either `npx wrangler login` or a `CLOUDFLARE_API_TOKEN` that can manage Workers and D1.
-2. Create or select the production D1 database named `link_hub`.
-3. Bind the D1 database to the Worker with binding name `DB`. In the Cloudflare dashboard, add a D1 database binding, set variable name to `DB`, and select `link_hub`.
-4. Apply remote migrations: `npm run db:migrate:remote`
-5. Set production secrets:
-   - `npx wrangler secret put ADMIN_PASSWORD`
-6. Verify packaging before release: `npx wrangler deploy --dry-run`
-7. Deploy to Cloudflare: `npm run deploy`
-8. Save the deployed `https://<worker>.workers.dev` URL and run smoke regression against it:
-   - PowerShell: `$env:BASE_URL='https://<worker>.workers.dev'; $env:SMOKE_PASSWORD='<admin-password>'; node scripts/local-smoke.mjs`
+1. Install dependencies if this is a fresh checkout: `npm install`.
+2. Authenticate Wrangler: `npx wrangler login`. In CI, provide a `CLOUDFLARE_API_TOKEN` with permissions to manage Workers and D1.
+3. Create the production D1 database if it does not exist: `npx wrangler d1 create link_hub`.
+4. In the Cloudflare dashboard, open Workers & Pages, select `personal-link-hub`, and confirm the D1 database binding:
+   - Binding variable name: `DB`
+   - D1 database: `link_hub`
+5. Apply remote D1 migrations: `npm run db:migrate:remote`.
+6. Set the production admin password as a Worker secret: `npx wrangler secret put ADMIN_PASSWORD`. Enter the password you want to use on `/login`.
+7. You can also check the secret in the Cloudflare dashboard under Worker settings, Variables and Secrets. The secret name must be exactly `ADMIN_PASSWORD`.
+8. Verify the deployment package without publishing: `npx wrangler deploy --dry-run`.
+9. Deploy to Cloudflare: `npm run deploy`.
+10. Open the deployed URL, visit `/login`, and sign in with the `ADMIN_PASSWORD` value you set as a secret.
+11. Optional: run the smoke test against production:
+    - PowerShell: `$env:BASE_URL='https://<your-domain-or-worker-url>'; $env:SMOKE_PASSWORD='<admin-password>'; node scripts/local-smoke.mjs`
+    - Replace `SMOKE_PASSWORD` with the same value stored in the Cloudflare `ADMIN_PASSWORD` secret.
 
 ## Smoke test contract
 
 `scripts/local-smoke.mjs` supports these environment variables:
 
 - `BASE_URL`: target server base URL, default `http://127.0.0.1:8787`
-- `SMOKE_PASSWORD`: login password, default `admin123`
+- `SMOKE_PASSWORD`: login password for the target environment. If omitted, the script uses `admin123`, which only works when your configured `ADMIN_PASSWORD` is also `admin123`.
 
 The same script can be used for both local verification and `workers.dev` regression.
 
@@ -70,4 +76,4 @@ The same script can be used for both local verification and `workers.dev` regres
 - New links are created from manual input; extra metadata can be filled in later on the detail page
 - URL validation blocks obvious localhost and private-network targets, but it does not do DNS-layer private IP resolution
 - `wrangler.jsonc` declares the D1 binding by name and intentionally does not store a `database_id`; bind `DB` to `link_hub` in the Cloudflare dashboard for dashboard-managed deployments
-- Production password must be provided explicitly through Wrangler secrets; do not rely on `.dev.vars` for deployment
+- Production password must be provided explicitly through Wrangler secrets or the Cloudflare dashboard; do not rely on `.dev.vars` for deployment
